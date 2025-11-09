@@ -15,6 +15,7 @@ module.exports = {
       name: "angularHost",
       remotes: {
         reactRemote: "reactRemote@http://localhost:5001/remoteEntry.js",
+        reactOrange: "reactOrange@http://localhost:5002/remoteEntry.js",
       },
       shared: {
         "@angular/core": { singleton: true, strictVersion: false, requiredVersion: "auto" },

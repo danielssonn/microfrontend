@@ -21,25 +21,25 @@ const App: React.FC<AppProps> = ({ eventBus }) => {
 
   // Load persisted message state from localStorage on mount
   const [receivedMessage, setReceivedMessage] = useState(() => {
-    const saved = localStorage.getItem('react-pink-receivedMessage');
+    const saved = localStorage.getItem('react-orange-receivedMessage');
     return saved || '';
   });
 
   const [lastMessageFrom, setLastMessageFrom] = useState(() => {
-    const saved = localStorage.getItem('react-pink-lastMessageFrom');
+    const saved = localStorage.getItem('react-orange-lastMessageFrom');
     return saved || '';
   });
 
   // Persist message state to localStorage whenever it changes
   useEffect(() => {
     if (receivedMessage) {
-      localStorage.setItem('react-pink-receivedMessage', receivedMessage);
+      localStorage.setItem('react-orange-receivedMessage', receivedMessage);
     }
   }, [receivedMessage]);
 
   useEffect(() => {
     if (lastMessageFrom) {
-      localStorage.setItem('react-pink-lastMessageFrom', lastMessageFrom);
+      localStorage.setItem('react-orange-lastMessageFrom', lastMessageFrom);
     }
   }, [lastMessageFrom]);
 
@@ -54,7 +54,7 @@ const App: React.FC<AppProps> = ({ eventBus }) => {
       if (event.from === 'angular') {
         setReceivedMessage(event.message);
         setLastMessageFrom('Angular (Blue)');
-        console.log('[React Pink] Received message from Angular:', event.message);
+        console.log('[React Orange] Received message from Angular:', event.message);
       }
     });
 
@@ -68,7 +68,7 @@ const App: React.FC<AppProps> = ({ eventBus }) => {
   const sendMessage = () => {
     if (messageInput.trim() && eventBus) {
       eventBus.sendMessage('react', messageInput);
-      console.log('[React Pink] Sent message:', messageInput);
+      console.log('[React Orange] Sent message:', messageInput);
       setMessageInput('');
     }
   };
@@ -81,7 +81,7 @@ const App: React.FC<AppProps> = ({ eventBus }) => {
 
   return (
     <div className="react-app">
-      <h1>React Remote (Pink)</h1>
+      <h1>React Remote (Orange)</h1>
 
       <div className="message-box">
         <label htmlFor="react-input">Send Message to Angular:</label>

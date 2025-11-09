@@ -10,10 +10,10 @@ import App from './App';
  * Conforms to MFELifecycle.mount() contract
  */
 export async function mount(container: HTMLElement, context: any): Promise<any> {
-  console.log('[React Bootstrap] Mounting with context:', context);
+  console.log('[React Orange Bootstrap] Mounting with context:', context);
 
   // Set a data attribute on container to identify this MFE
-  container.setAttribute('data-mfe', 'react-pink');
+  container.setAttribute('data-mfe', 'react-orange');
 
   // Create React root
   const root = ReactDOM.createRoot(container);
@@ -26,8 +26,8 @@ export async function mount(container: HTMLElement, context: any): Promise<any> 
   // Return MFEInstance with instance-specific state
   return {
     _internal: { root, container },
-    id: `react-${Date.now()}`,
-    mfeName: context.metadata?.mfeName || 'reactRemote',
+    id: `react-orange-${Date.now()}`,
+    mfeName: context.metadata?.mfeName || 'reactOrange',
     mountedAt: new Date(),
     isHealthy: () => root !== null
   };
@@ -38,7 +38,7 @@ export async function mount(container: HTMLElement, context: any): Promise<any> 
  * Conforms to MFELifecycle.unmount() contract
  */
 export async function unmount(instance: any): Promise<void> {
-  console.log('[React Bootstrap] Unmounting - cleaning up DOM');
+  console.log('[React Orange Bootstrap] Unmounting - cleaning up DOM');
 
   const { root, container } = instance._internal;
 
@@ -49,12 +49,12 @@ export async function unmount(instance: any): Promise<void> {
 
   // Clear the container
   if (container) {
-    console.log('[React Bootstrap] Clearing container');
+    console.log('[React Orange Bootstrap] Clearing container');
     container.innerHTML = '';
     container.removeAttribute('data-mfe');
   }
 
-  console.log('[React Bootstrap] Cleanup complete');
+  console.log('[React Orange Bootstrap] Cleanup complete');
 }
 
 // For standalone development

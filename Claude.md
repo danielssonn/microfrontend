@@ -11,12 +11,13 @@
 
 1. [Quick Start](#quick-start)
 2. [Project Structure](#project-structure)
-3. [Implementation Guide](#implementation-guide)
-4. [Integration Patterns](#integration-patterns)
-5. [Testing Strategy](#testing-strategy)
-6. [Deployment Guide](#deployment-guide)
-7. [Monitoring & Observability](#monitoring--observability)
-8. [Checklist](#checklist)
+3. [**Common Pitfalls & How to Avoid Them**](#common-pitfalls--how-to-avoid-them)
+4. [Implementation Guide](#implementation-guide)
+5. [Integration Patterns](#integration-patterns)
+6. [Testing Strategy](#testing-strategy)
+7. [Deployment Guide](#deployment-guide)
+8. [Monitoring & Observability](#monitoring--observability)
+9. [Checklist](#checklist)
 
 ---
 
@@ -92,6 +93,438 @@ mfe-<domain-name>/
 ├── package.json
 └── README.md
 ```
+
+---
+
+## Common Pitfalls & How to Avoid Them
+
+⚠️ **CRITICAL**: These pitfalls are based on real production issues. Every new MFE MUST follow these patterns to avoid catastrophic failures.
+
+### Pitfall 1: webpack style-loader CSS Module Caching ⚠️ CRITICAL
+
+**Problem**: webpack's style-loader caches CSS modules globally, NOT per-mount. When switching between MFEs:
+- First MFE's CSS is injected into `<style>` tags in `<head>`
+- webpack caches the CSS module
+- Second MFE's CSS is injected
+- When switching back to first MFE, webpack DOES NOT re-inject its CSS (cached!)
+- Result: Second MFE's styles persist because first MFE's styles are never re-applied
+
+**Incorrect Approach** (will fail):
+```typescript
+// ❌ DON'T DO THIS - Tracking style tags doesn't work
+export async function mount(container: HTMLElement, context: any) {
+  const existingStyles = Array.from(document.head.querySelectorAll('style'));
+  const existingStyleCount = existingStyles.length;
+
+  const root = ReactDOM.createRoot(container);
+  root.render(<App />);
+
+  // Capture new styles
+  await new Promise(resolve => setTimeout(resolve, 100));
+  const allStyles = Array.from(document.head.querySelectorAll('style'));
+  const styleElements = allStyles.slice(existingStyleCount);
+
+  return { _internal: { root, styleElements } };
+}
+
+export async function unmount(instance: any) {
+  // ❌ This removes styles, but they won't be re-injected on next mount!
+  instance._internal.styleElements.forEach(el => el.remove());
+}
+```
+
+**Why tracking fails:**
+```
+Mount Pink   → webpack injects Pink CSS (1st time)
+Mount Orange → webpack injects Orange CSS (1st time)
+Unmount Orange → Remove Orange styles ✓
+Mount Pink   → webpack says "already loaded" → NO new injection ❌
+Result: Orange styles gone, Pink styles gone → broken UI
+```
+
+**✅ CORRECT Approach** - CSS Attribute Scoping:
+
+```typescript
+// bootstrap.tsx
+export async function mount(container: HTMLElement, context: any): Promise<any> {
+  // Set unique data attribute for this MFE
+  container.setAttribute('data-mfe', 'payment-mfe');  // Use your MFE name
+
+  const root = ReactDOM.createRoot(container);
+  root.render(<App eventBus={context.eventBus} />);
+
+  return {
+    _internal: { root, container },
+    id: `payment-${Date.now()}`,
+    mfeName: context.metadata?.mfeName || 'payments',
+    mountedAt: new Date(),
+    isHealthy: () => root !== null
+  };
+}
+
+export async function unmount(instance: any): Promise<void> {
+  const { root, container } = instance._internal;
+
+  if (root) {
+    root.unmount();
+  }
+
+  if (container) {
+    container.innerHTML = '';
+    container.removeAttribute('data-mfe');  // Clean up attribute
+  }
+}
+```
+
+```css
+/* App.css - Scope ALL selectors with data attribute */
+[data-mfe="payment-mfe"] .button {
+  background: blue;
+}
+
+[data-mfe="payment-mfe"] .card {
+  border: 1px solid gray;
+}
+
+[data-mfe="payment-mfe"] h1 {
+  color: darkblue;
+}
+
+/* ❌ DON'T write unscoped selectors */
+/* .button { background: blue; }  ← This will leak to other MFEs! */
+```
+
+**How it works:**
+- Both MFE CSS files remain loaded in DOM (webpack caches them)
+- Data attribute on container controls which styles apply
+- When switching MFEs, changing the attribute automatically switches which CSS rules match
+- No DOM manipulation needed - pure CSS specificity
+
+**Testing:**
+```bash
+# Test MFE switching multiple times
+1. Load Payment MFE → should see blue theme
+2. Load Account MFE → should see green theme
+3. Load Payment MFE again → should see blue theme (NOT green!)
+4. Repeat 10 times → colors should switch correctly every time
+```
+
+---
+
+### Pitfall 2: GlobalEventBus Subscription Accumulation ⚠️ CRITICAL
+
+**Problem**: Event bus singletons accumulate subscriptions from unmounted MFEs.
+
+**Incorrect Approach**:
+```typescript
+// ❌ DON'T DO THIS
+export async function mount(container: HTMLElement, context: any) {
+  const root = ReactDOM.createRoot(container);
+
+  // Subscribe to events
+  context.eventBus.subscribe('PaymentCompleted', (payload) => {
+    console.log('Payment completed:', payload);
+  });
+
+  root.render(<App />);
+  return { _internal: { root } };
+}
+
+// ❌ Unmount doesn't clean up subscriptions!
+export async function unmount(instance: any) {
+  instance._internal.root.unmount();
+}
+
+// Result: After 10 mount/unmount cycles, the same event fires 10 handlers!
+```
+
+**✅ CORRECT Approach**:
+```typescript
+export async function mount(container: HTMLElement, context: any): Promise<any> {
+  container.setAttribute('data-mfe', 'payment-mfe');
+
+  const root = ReactDOM.createRoot(container);
+
+  // Store unsubscribe functions
+  const subscriptions: Array<() => void> = [];
+
+  // Subscribe and store cleanup function
+  const unsubPayment = context.eventBus.subscribe('PaymentCompleted', (payload) => {
+    console.log('Payment completed:', payload);
+  });
+  subscriptions.push(unsubPayment);
+
+  const unsubAccount = context.eventBus.subscribe('AccountUpdated', (payload) => {
+    console.log('Account updated:', payload);
+  });
+  subscriptions.push(unsubAccount);
+
+  root.render(
+    <React.StrictMode>
+      <App eventBus={context.eventBus} />
+    </React.StrictMode>
+  );
+
+  return {
+    _internal: { root, container, subscriptions },  // Store subscriptions!
+    id: `payment-${Date.now()}`,
+    mfeName: context.metadata?.mfeName || 'payments',
+    mountedAt: new Date(),
+    isHealthy: () => root !== null
+  };
+}
+
+export async function unmount(instance: any): Promise<void> {
+  const { root, container, subscriptions } = instance._internal;
+
+  // Unmount React
+  if (root) {
+    root.unmount();
+  }
+
+  // ✅ Clean up ALL subscriptions
+  if (subscriptions && Array.isArray(subscriptions)) {
+    subscriptions.forEach(unsub => {
+      if (typeof unsub === 'function') {
+        unsub();
+      }
+    });
+  }
+
+  // Clear container
+  if (container) {
+    container.innerHTML = '';
+    container.removeAttribute('data-mfe');
+  }
+
+  console.log('[Payment MFE] Cleanup complete - subscriptions removed');
+}
+```
+
+**Testing:**
+```typescript
+// Test subscription cleanup
+test('Event subscriptions cleaned up on unmount', async () => {
+  let handlerCallCount = 0;
+
+  for (let i = 0; i < 10; i++) {
+    const instance = await mount(container, context);
+    await unmount(instance);
+  }
+
+  // Publish event
+  eventBus.publish('PaymentCompleted', { id: '123' });
+
+  // Should NOT fire any handlers (all cleaned up)
+  expect(handlerCallCount).toBe(0);
+});
+```
+
+---
+
+### Pitfall 3: Module Federation Loader Cache Never Invalidates ⚠️ HIGH
+
+**Problem**: ModuleFederationLoader caches lifecycle modules and scripts indefinitely.
+
+**Incorrect Approach**:
+```typescript
+// ❌ DON'T DO THIS
+export class ModuleFederationLoader implements MFELoader {
+  private loadedMFEs: Map<string, MFELifecycle> = new Map();
+  private loadedScripts: Set<string> = new Set();
+
+  async load(config: MFELoadConfig): Promise<MFELifecycle> {
+    // Returns cached version forever
+    if (this.loadedMFEs.has(config.name)) {
+      return this.loadedMFEs.get(config.name)!;
+    }
+
+    // Load and cache
+    const lifecycle = await this.loadModule(config);
+    this.loadedMFEs.set(config.name, lifecycle);  // ❌ Never cleared!
+    return lifecycle;
+  }
+}
+```
+
+**✅ CORRECT Approach**:
+```typescript
+export class ModuleFederationLoader implements MFELoader {
+  private loadedMFEs: Map<string, MFELifecycle> = new Map();
+  private loadedScripts: Set<string> = new Set();
+  private scriptElements: Map<string, HTMLScriptElement> = new Map();
+
+  async load(config: MFELoadConfig): Promise<MFELifecycle> {
+    // Check if already loaded
+    if (this.loadedMFEs.has(config.name)) {
+      console.log(`[Loader] MFE ${config.name} already loaded, returning cached`);
+      return this.loadedMFEs.get(config.name)!;
+    }
+
+    const lifecycle = await this.loadModule(config);
+    this.loadedMFEs.set(config.name, lifecycle);
+    return lifecycle;
+  }
+
+  async unload(mfeName: string): Promise<void> {
+    console.log(`[Loader] Unloading MFE: ${mfeName}`);
+
+    // Remove from cache
+    this.loadedMFEs.delete(mfeName);
+
+    // Optional: Remove script element (be careful with shared dependencies!)
+    const scriptElement = this.scriptElements.get(mfeName);
+    if (scriptElement && scriptElement.parentNode) {
+      scriptElement.parentNode.removeChild(scriptElement);
+    }
+    this.scriptElements.delete(mfeName);
+
+    console.log(`[Loader] MFE ${mfeName} unloaded from cache`);
+  }
+
+  clearCache(): void {
+    console.log('[Loader] Clearing all cached MFEs');
+    this.loadedMFEs.clear();
+
+    // Remove all script elements
+    this.scriptElements.forEach((script, mfeName) => {
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    });
+    this.scriptElements.clear();
+    this.loadedScripts.clear();
+  }
+}
+```
+
+---
+
+### Pitfall 4: Angular Service State Pollution Across MFE Switches ⚠️ MEDIUM
+
+**Problem**: Angular singleton services (`providedIn: 'root'`) maintain state across MFE mount/unmount cycles.
+
+**Incorrect Approach**:
+```typescript
+// ❌ DON'T DO THIS
+@Injectable({ providedIn: 'root' })
+export class MFELoaderService {
+  private loadedInstances: Map<string, MFEInstance> = new Map();
+
+  async loadMFE(config: MFELoadConfig, container: HTMLElement): Promise<MFEInstance> {
+    const instance = await this.loader.mount(container, context);
+    this.loadedInstances.set(config.name, instance);  // ❌ Never cleared!
+    return instance;
+  }
+}
+
+// After loading Pink → Orange → Pink:
+// loadedInstances has: { 'pink': <old instance>, 'orange': <instance> }
+// Old pink instance is leaked!
+```
+
+**✅ CORRECT Approach**:
+```typescript
+@Injectable({ providedIn: 'root' })
+export class MFELoaderService {
+  private loadedInstances: Map<string, MFEInstance> = new Map();
+
+  async loadMFE(config: MFELoadConfig, container: HTMLElement): Promise<MFEInstance> {
+    const instance = await this.loader.mount(container, context);
+    this.loadedInstances.set(config.name, instance);
+    return instance;
+  }
+
+  async unloadMFE(mfeName: string): Promise<void> {
+    const instance = this.loadedInstances.get(mfeName);
+    if (!instance) {
+      console.warn(`[MFELoader] No instance found for ${mfeName}`);
+      return;
+    }
+
+    // Unmount via lifecycle
+    await this.loader.unmount(instance);
+
+    // ✅ Remove from instance map
+    this.loadedInstances.delete(mfeName);
+
+    console.log(`[MFELoader] ${mfeName} unloaded and removed from cache`);
+  }
+
+  clearAll(): void {
+    console.log('[MFELoader] Clearing all loaded instances');
+
+    // Unmount all instances
+    const promises = Array.from(this.loadedInstances.keys()).map(name =>
+      this.unloadMFE(name)
+    );
+
+    return Promise.all(promises).then(() => {
+      this.loadedInstances.clear();
+    });
+  }
+}
+```
+
+---
+
+### Pitfall 5: document.head Script Tag Accumulation ⚠️ HIGH
+
+**Problem**: remoteEntry.js scripts appended to `document.head` but never removed.
+
+**✅ CORRECT Approach**:
+```typescript
+export class ModuleFederationLoader implements MFELoader {
+  private scriptElements: Map<string, HTMLScriptElement> = new Map();
+
+  private loadScript(url: string, mfeName: string): Promise<void> {
+    // Check if already loaded
+    if (this.scriptElements.has(mfeName)) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = url;
+      script.type = 'text/javascript';
+      script.async = true;
+
+      script.onload = () => {
+        this.scriptElements.set(mfeName, script);  // Track it!
+        resolve();
+      };
+
+      script.onerror = () => {
+        reject(new Error(`Failed to load script: ${url}`));
+      };
+
+      document.head.appendChild(script);
+    });
+  }
+
+  async unload(mfeName: string): Promise<void> {
+    // Remove script element
+    const scriptElement = this.scriptElements.get(mfeName);
+    if (scriptElement?.parentNode) {
+      scriptElement.parentNode.removeChild(scriptElement);
+      console.log(`[Loader] Removed script for ${mfeName}`);
+    }
+    this.scriptElements.delete(mfeName);
+  }
+}
+```
+
+---
+
+### Summary: Must-Follow Patterns
+
+| Pitfall | Solution | Priority |
+|---------|----------|----------|
+| **CSS caching** | Use `[data-mfe="name"]` attribute scoping | CRITICAL |
+| **Event subscriptions** | Store unsubscribe functions, call in unmount | CRITICAL |
+| **Loader cache** | Implement unload() to clear cached modules | HIGH |
+| **Service state** | Clear instance maps in unload methods | MEDIUM |
+| **Script accumulation** | Track script elements, remove in unload | HIGH |
 
 ---
 

@@ -24,6 +24,69 @@ h1 {
   font-weight: 700;
 }
 
+.mfe-switcher {
+  margin-bottom: 30px;
+  padding: 20px;
+  background: #f0f4ff;
+  border-radius: 8px;
+  border: 2px solid #4a5fc1;
+}
+
+.mfe-switcher label {
+  display: block;
+  margin-bottom: 15px;
+  color: #4a5fc1;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.switch-buttons {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+}
+
+.switch-button {
+  padding: 12px 24px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: white;
+}
+
+.pink-button {
+  background: linear-gradient(135deg, #ff6b9d 0%, #c06c84 100%);
+  border-color: #ff1493;
+}
+
+.pink-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 20, 147, 0.4);
+}
+
+.orange-button {
+  background: linear-gradient(135deg, #ff8c42 0%, #ff6b35 100%);
+  border-color: #ff6600;
+}
+
+.orange-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 102, 0, 0.4);
+}
+
+.switch-button.active {
+  border-width: 4px;
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.switch-button:active {
+  transform: translateY(0);
+}
+
 .message-box {
   display: flex;
   flex-direction: column;
