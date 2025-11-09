@@ -1,0 +1,27 @@
+<div class="container">
+  <div class="angular-section">
+    <h1>{{ title }}</h1>
+
+    <div class="message-box">
+      <label for="angular-input">Send Message to React:</label>
+      <input
+        id="angular-input"
+        type="text"
+        [(ngModel)]="messageInput"
+        (keyup.enter)="sendMessage()"
+        placeholder="Type your message here..."
+        class="input-field"
+      />
+      <button (click)="sendMessage()" class="send-button">Send to React</button>
+    </div>
+
+    <div class="received-box" *ngIf="receivedMessage">
+      <h3>Received from {{ lastMessageFrom }}:</h3>
+      <p class="received-message">{{ receivedMessage }}</p>
+    </div>
+  </div>
+
+  <div class="react-wrapper">
+    <div id="react-container"></div>
+  </div>
+</div>

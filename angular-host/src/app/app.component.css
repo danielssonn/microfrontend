@@ -1,0 +1,111 @@
+.container {
+  width: 100%;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.angular-section {
+  background: rgba(255, 255, 255, 0.95);
+  border: 4px solid #4a5fc1;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+  color: #4a5fc1;
+  margin-bottom: 30px;
+  font-size: 32px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.message-box {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 30px;
+}
+
+label {
+  color: #4a5fc1;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.input-field {
+  padding: 12px 16px;
+  border: 2px solid #4a5fc1;
+  border-radius: 8px;
+  font-size: 16px;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.input-field:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.send-button {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.send-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.send-button:active {
+  transform: translateY(0);
+}
+
+.received-box {
+  background: #f0f4ff;
+  border: 2px solid #4a5fc1;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.received-box h3 {
+  color: #4a5fc1;
+  margin-bottom: 12px;
+  font-size: 18px;
+}
+
+.received-message {
+  color: #333;
+  font-size: 16px;
+  background: white;
+  padding: 12px;
+  border-radius: 6px;
+  word-wrap: break-word;
+}
+
+.react-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+#react-container {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
