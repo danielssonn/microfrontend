@@ -1620,7 +1620,9 @@
           const failureRate = (failures / (cycles * 2)) * 100;
           const avgTimePerCycle = duration / cycles;
 
-          const passed = failures === 0 && memoryGrowthMB < (cycles / 20); // Dynamic threshold
+          // Threshold: 250KB per cycle (5MB for 20 cycles as per docs)
+          const memoryThresholdMB = (cycles * 0.25);
+          const passed = failures === 0 && memoryGrowthMB < memoryThresholdMB;
 
           results.push({
             cycles,
@@ -1636,7 +1638,7 @@
             `Breaking Point: ${cycles} cycles`,
             passed,
             duration,
-            `Failures: ${failures}/${cycles * 2} (${failureRate.toFixed(1)}%), Memory: ${memoryGrowthMB.toFixed(2)}MB, Avg: ${avgTimePerCycle.toFixed(2)}ms/cycle`
+            `Failures: ${failures}/${cycles * 2} (${failureRate.toFixed(1)}%), Memory: ${memoryGrowthMB.toFixed(2)}MB (threshold: ${memoryThresholdMB.toFixed(2)}MB), Avg: ${avgTimePerCycle.toFixed(2)}ms/cycle`
           );
 
           // Stop if we found the breaking point
@@ -1647,9 +1649,11 @@
             break;
           }
 
-          if (memoryGrowthMB > cycles / 10) { // Memory growing too fast
-            logConsole(`\n⚠️ MEMORY LIMIT REACHED at ${cycles} cycles!`, 'warn');
-            logConsole(`Memory growth: ${memoryGrowthMB.toFixed(2)}MB (threshold: ${(cycles / 10).toFixed(2)}MB)`, 'warn');
+          // Stop if memory growth exceeds 500KB per cycle (double the acceptable threshold)
+          const criticalMemoryThreshold = cycles * 0.5;
+          if (memoryGrowthMB > criticalMemoryThreshold) {
+            logConsole(`\n⚠️ CRITICAL MEMORY GROWTH at ${cycles} cycles!`, 'warn');
+            logConsole(`Memory growth: ${memoryGrowthMB.toFixed(2)}MB (critical threshold: ${criticalMemoryThreshold.toFixed(2)}MB)`, 'warn');
             break;
           }
 
