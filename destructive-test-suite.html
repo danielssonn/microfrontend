@@ -1,0 +1,1645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MFE Destructive Test Suite</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: #58a6ff;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #8b949e;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .test-controls {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .control-group {
+      margin-bottom: 15px;
+    }
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-group label {
+      display: block;
+      color: #8b949e;
+      margin-bottom: 5px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background: #238636;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    button:hover {
+      background: #2ea043;
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button.destructive {
+      background: #da3633;
+    }
+
+    button.destructive:hover {
+      background: #f85149;
+    }
+
+    button.warning {
+      background: #bb8009;
+    }
+
+    button.warning:hover {
+      background: #d29922;
+    }
+
+    button:disabled {
+      background: #21262d;
+      color: #484f58;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    input[type="number"] {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 8px 12px;
+      border-radius: 6px;
+      width: 120px;
+      font-size: 14px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 15px;
+    }
+
+    .stat-card h3 {
+      color: #8b949e;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      color: #58a6ff;
+      margin-bottom: 5px;
+    }
+
+    .stat-value.danger {
+      color: #f85149;
+    }
+
+    .stat-value.warning {
+      color: #d29922;
+    }
+
+    .stat-value.success {
+      color: #3fb950;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #8b949e;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: #21262d;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: #58a6ff;
+      transition: width 0.3s;
+    }
+
+    .progress-fill.danger {
+      background: #f85149;
+    }
+
+    .test-results {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 20px;
+      margin-bottom: 20px;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+
+    .test-results h2 {
+      color: #58a6ff;
+      margin-bottom: 15px;
+      font-size: 18px;
+    }
+
+    .test-item {
+      border-left: 3px solid #30363d;
+      padding: 12px 15px;
+      margin-bottom: 10px;
+      background: #0d1117;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .test-item.pass {
+      border-left-color: #3fb950;
+    }
+
+    .test-item.fail {
+      border-left-color: #f85149;
+    }
+
+    .test-item.warn {
+      border-left-color: #d29922;
+    }
+
+    .test-item.running {
+      border-left-color: #58a6ff;
+    }
+
+    .test-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 5px;
+    }
+
+    .test-status {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #30363d;
+    }
+
+    .test-status.pass {
+      background: #3fb950;
+    }
+
+    .test-status.fail {
+      background: #f85149;
+    }
+
+    .test-status.warn {
+      background: #d29922;
+    }
+
+    .test-status.running {
+      background: #58a6ff;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .test-name {
+      font-weight: 600;
+      color: #c9d1d9;
+      flex: 1;
+    }
+
+    .test-duration {
+      font-size: 12px;
+      color: #8b949e;
+    }
+
+    .test-details {
+      font-size: 13px;
+      color: #8b949e;
+      line-height: 1.6;
+      margin-left: 22px;
+    }
+
+    .test-error {
+      background: #1c1011;
+      border: 1px solid #6e1616;
+      border-radius: 4px;
+      padding: 10px;
+      margin-top: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #f85149;
+    }
+
+    .mfe-containers {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .mfe-container {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 15px;
+      min-height: 300px;
+    }
+
+    .mfe-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #30363d;
+    }
+
+    .mfe-title {
+      font-weight: 600;
+      color: #c9d1d9;
+    }
+
+    .mfe-status {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 3px;
+      background: #21262d;
+      color: #8b949e;
+    }
+
+    .mfe-status.loaded {
+      background: #1a2f1a;
+      color: #3fb950;
+    }
+
+    .mfe-content {
+      padding: 10px;
+    }
+
+    .console-output {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 15px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+      margin-top: 20px;
+    }
+
+    .console-output h3 {
+      color: #8b949e;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .console-line {
+      margin-bottom: 4px;
+      line-height: 1.4;
+    }
+
+    .console-line.error {
+      color: #f85149;
+    }
+
+    .console-line.warn {
+      color: #d29922;
+    }
+
+    .console-line.success {
+      color: #3fb950;
+    }
+
+    .console-line.info {
+      color: #58a6ff;
+    }
+
+    .summary-banner {
+      background: linear-gradient(135deg, #1a2f1a 0%, #0d1117 100%);
+      border: 1px solid #3fb950;
+      border-radius: 6px;
+      padding: 20px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .summary-banner.fail {
+      background: linear-gradient(135deg, #2f1a1a 0%, #0d1117 100%);
+      border-color: #f85149;
+    }
+
+    .summary-banner h2 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+
+    .summary-stats {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      margin-top: 15px;
+    }
+
+    .summary-stat {
+      text-align: center;
+    }
+
+    .summary-stat-value {
+      font-size: 32px;
+      font-weight: bold;
+    }
+
+    .summary-stat-label {
+      font-size: 12px;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #0d1117;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #30363d;
+      border-radius: 5px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #484f58;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧪 MFE Destructive Test Suite</h1>
+    <p class="subtitle">Aggressive testing for cross-lifecycle impact, messaging isolation, and memory leak detection</p>
+
+    <div class="test-controls">
+      <div class="control-group">
+        <label>Quick Tests</label>
+        <div class="button-group">
+          <button onclick="runAllTests()">Run All Tests</button>
+          <button onclick="runLifecycleTests()">Lifecycle Tests</button>
+          <button onclick="runMessagingTests()">Messaging Tests</button>
+          <button onclick="runMemoryTests()">Memory Leak Tests</button>
+          <button onclick="runStressTests()" class="warning">Stress Tests</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label>Destructive Tests ⚠️</label>
+        <div class="button-group">
+          <button onclick="runRapidMountUnmount()" class="destructive">Rapid Mount/Unmount (100x)</button>
+          <button onclick="runParallelMFELoad()" class="destructive">Parallel MFE Load</button>
+          <button onclick="runMessageFlood()" class="destructive">Message Flood (1000 msgs/sec)</button>
+          <button onclick="runMemoryBomb()" class="destructive">Memory Bomb</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label>Custom Test Configuration</label>
+        <div class="button-group">
+          <label style="display: inline; text-transform: none; margin-right: 10px;">Iterations:</label>
+          <input type="number" id="iterations" value="10" min="1" max="1000">
+          <button onclick="runCustomStressTest()">Run Custom Stress Test</button>
+          <button onclick="clearAll()" class="warning">Clear All</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3>Tests Run</h3>
+        <div class="stat-value" id="testsRun">0</div>
+        <div class="stat-label">Total test executions</div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressBar" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <h3>Tests Passed</h3>
+        <div class="stat-value success" id="testsPassed">0</div>
+        <div class="stat-label">Successful tests</div>
+      </div>
+
+      <div class="stat-card">
+        <h3>Tests Failed</h3>
+        <div class="stat-value danger" id="testsFailed">0</div>
+        <div class="stat-label">Failed tests</div>
+      </div>
+
+      <div class="stat-card">
+        <h3>Memory Usage</h3>
+        <div class="stat-value" id="memoryUsage">-</div>
+        <div class="stat-label">Current heap size (MB)</div>
+      </div>
+
+      <div class="stat-card">
+        <h3>Active MFE Instances</h3>
+        <div class="stat-value" id="activeMFEs">0</div>
+        <div class="stat-label">Currently mounted</div>
+      </div>
+
+      <div class="stat-card">
+        <h3>Event Subscriptions</h3>
+        <div class="stat-value" id="activeSubscriptions">0</div>
+        <div class="stat-label">Active listeners</div>
+      </div>
+    </div>
+
+    <div class="mfe-containers">
+      <div class="mfe-container">
+        <div class="mfe-header">
+          <div class="mfe-title">React Pink Container</div>
+          <div class="mfe-status" id="pinkStatus">Empty</div>
+        </div>
+        <div class="mfe-content" id="pink-container"></div>
+      </div>
+
+      <div class="mfe-container">
+        <div class="mfe-header">
+          <div class="mfe-title">React Orange Container</div>
+          <div class="mfe-status" id="orangeStatus">Empty</div>
+        </div>
+        <div class="mfe-content" id="orange-container"></div>
+      </div>
+    </div>
+
+    <div class="test-results">
+      <h2>Test Results</h2>
+      <div id="testResults"></div>
+    </div>
+
+    <div class="console-output">
+      <h3>Console Output</h3>
+      <div id="consoleOutput"></div>
+    </div>
+  </div>
+
+  <script>
+    // Test state
+    let testsRun = 0;
+    let testsPassed = 0;
+    let testsFailed = 0;
+    let totalTests = 0;
+    let activeMFECount = 0;
+    let subscriptionCount = 0;
+
+    // MFE instances tracking
+    const loadedMFEs = new Map();
+    const eventBusSubscriptions = [];
+
+    // Mock event bus for testing
+    class TestEventBus {
+      constructor() {
+        this.handlers = new Map();
+        this.subscriptionCount = 0;
+      }
+
+      subscribe(eventName, handler) {
+        if (!this.handlers.has(eventName)) {
+          this.handlers.set(eventName, []);
+        }
+        this.handlers.get(eventName).push(handler);
+        this.subscriptionCount++;
+        subscriptionCount++;
+        updateStats();
+
+        // Return unsubscribe function
+        return () => {
+          const handlers = this.handlers.get(eventName);
+          const index = handlers.indexOf(handler);
+          if (index > -1) {
+            handlers.splice(index, 1);
+            this.subscriptionCount--;
+            subscriptionCount--;
+            updateStats();
+          }
+        };
+      }
+
+      publish(eventName, payload) {
+        const handlers = this.handlers.get(eventName) || [];
+        handlers.forEach(handler => {
+          try {
+            handler(payload);
+          } catch (error) {
+            logConsole(`Event handler error: ${error.message}`, 'error');
+          }
+        });
+      }
+
+      subscribeToMessages(handler) {
+        return this.subscribe('message', handler);
+      }
+
+      sendMessage(from, message) {
+        this.publish('message', { from, message });
+      }
+
+      clear() {
+        this.handlers.clear();
+        subscriptionCount -= this.subscriptionCount;
+        this.subscriptionCount = 0;
+        updateStats();
+      }
+    }
+
+    const globalEventBus = new TestEventBus();
+
+    // Logging
+    function logConsole(message, type = 'info') {
+      const output = document.getElementById('consoleOutput');
+      const line = document.createElement('div');
+      line.className = `console-line ${type}`;
+      const timestamp = new Date().toLocaleTimeString();
+      line.textContent = `[${timestamp}] ${message}`;
+      output.appendChild(line);
+      output.scrollTop = output.scrollHeight;
+      console.log(`[${type.toUpperCase()}] ${message}`);
+    }
+
+    // Test reporting
+    function reportTest(name, passed, duration, details, error = null) {
+      testsRun++;
+      if (passed) {
+        testsPassed++;
+      } else {
+        testsFailed++;
+      }
+
+      const results = document.getElementById('testResults');
+      const item = document.createElement('div');
+      item.className = `test-item ${passed ? 'pass' : 'fail'}`;
+
+      const header = document.createElement('div');
+      header.className = 'test-header';
+
+      const status = document.createElement('div');
+      status.className = `test-status ${passed ? 'pass' : 'fail'}`;
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'test-name';
+      nameEl.textContent = name;
+
+      const durationEl = document.createElement('div');
+      durationEl.className = 'test-duration';
+      durationEl.textContent = `${duration}ms`;
+
+      header.appendChild(status);
+      header.appendChild(nameEl);
+      header.appendChild(durationEl);
+
+      const detailsEl = document.createElement('div');
+      detailsEl.className = 'test-details';
+      detailsEl.textContent = details;
+
+      item.appendChild(header);
+      item.appendChild(detailsEl);
+
+      if (error) {
+        const errorEl = document.createElement('div');
+        errorEl.className = 'test-error';
+        errorEl.textContent = error;
+        item.appendChild(errorEl);
+      }
+
+      results.insertBefore(item, results.firstChild);
+      updateStats();
+
+      logConsole(`${passed ? '✓' : '✗'} ${name}: ${details}`, passed ? 'success' : 'error');
+    }
+
+    function updateStats() {
+      document.getElementById('testsRun').textContent = testsRun;
+      document.getElementById('testsPassed').textContent = testsPassed;
+      document.getElementById('testsFailed').textContent = testsFailed;
+      document.getElementById('activeMFEs').textContent = activeMFECount;
+      document.getElementById('activeSubscriptions').textContent = subscriptionCount;
+
+      if (totalTests > 0) {
+        const progress = (testsRun / totalTests) * 100;
+        const progressBar = document.getElementById('progressBar');
+        progressBar.style.width = `${progress}%`;
+        if (testsFailed > 0) {
+          progressBar.classList.add('danger');
+        }
+      }
+
+      // Update memory if available
+      if (performance.memory) {
+        const usedMB = (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2);
+        document.getElementById('memoryUsage').textContent = usedMB;
+      }
+    }
+
+    // MFE loading utilities
+    async function loadScript(url, name) {
+      return new Promise((resolve, reject) => {
+        const existing = document.querySelector(`script[src="${url}"]`);
+        if (existing) {
+          resolve();
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = url;
+        script.type = 'text/javascript';
+        script.crossOrigin = 'anonymous';  // Add CORS support
+
+        script.onload = () => {
+          logConsole(`✓ Loaded script: ${url}`, 'success');
+          resolve();
+        };
+
+        script.onerror = (error) => {
+          const errorMsg = `Failed to load ${url}. Is the server running on the correct port?`;
+          logConsole(`✗ ${errorMsg}`, 'error');
+          reject(new Error(errorMsg));
+        };
+
+        document.head.appendChild(script);
+      });
+    }
+
+    async function loadMFE(name, url, containerId) {
+      const start = performance.now();
+
+      try {
+        // Load script
+        await loadScript(url, name);
+
+        // Get container
+        const scope = name === 'reactRemote' ? 'reactRemote' : 'reactOrange';
+        const container = window[scope];
+
+        if (!container) {
+          throw new Error(`Container ${scope} not found`);
+        }
+
+        // Initialize
+        await container.init({});
+
+        // Get module
+        const factory = await container.get('./App');
+        const module = factory();
+
+        // Mount
+        const containerEl = document.getElementById(containerId);
+        const instance = await module.mount(containerEl, {
+          metadata: { mfeName: name, version: '1.0.0' },
+          routing: { currentPath: '/' },
+          eventBus: globalEventBus,
+          auth: { isAuthenticated: false },
+          config: {}
+        });
+
+        loadedMFEs.set(name, { module, instance, container: containerEl });
+        activeMFECount++;
+        updateMFEStatus(name, 'loaded');
+
+        const duration = performance.now() - start;
+        return { success: true, duration, instance };
+      } catch (error) {
+        const duration = performance.now() - start;
+        return { success: false, duration, error: error.message };
+      }
+    }
+
+    async function unloadMFE(name) {
+      const start = performance.now();
+
+      try {
+        const mfe = loadedMFEs.get(name);
+        if (!mfe) {
+          throw new Error(`MFE ${name} not loaded`);
+        }
+
+        await mfe.module.unmount(mfe.instance);
+        mfe.container.innerHTML = '';
+        loadedMFEs.delete(name);
+        activeMFECount--;
+        updateMFEStatus(name, 'empty');
+
+        const duration = performance.now() - start;
+        return { success: true, duration };
+      } catch (error) {
+        const duration = performance.now() - start;
+        return { success: false, duration, error: error.message };
+      }
+    }
+
+    function updateMFEStatus(name, status) {
+      const statusId = name === 'reactRemote' ? 'pinkStatus' : 'orangeStatus';
+      const el = document.getElementById(statusId);
+      el.textContent = status === 'loaded' ? 'Loaded' : 'Empty';
+      el.className = `mfe-status ${status}`;
+    }
+
+    // Test suites
+    async function runLifecycleTests() {
+      logConsole('Starting Lifecycle Tests...', 'info');
+      totalTests = 6;
+
+      // Test 1: Basic mount/unmount
+      await testBasicMountUnmount();
+
+      // Test 2: Repeated mount/unmount
+      await testRepeatedMountUnmount();
+
+      // Test 3: Cross-contamination
+      await testCrossContamination();
+
+      // Test 4: Parallel mount
+      await testParallelMount();
+
+      // Test 5: Out-of-order unmount
+      await testOutOfOrderUnmount();
+
+      // Test 6: Re-mount after unmount
+      await testRemountAfterUnmount();
+
+      logConsole('Lifecycle Tests Complete', 'success');
+    }
+
+    async function testBasicMountUnmount() {
+      const start = performance.now();
+      const result = await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+
+      if (!result.success) {
+        reportTest('Basic Mount', false, performance.now() - start, 'Failed to mount MFE', result.error);
+        return;
+      }
+
+      await sleep(100);
+      const unmountResult = await unloadMFE('reactRemote');
+
+      const passed = result.success && unmountResult.success;
+      const duration = performance.now() - start;
+      reportTest(
+        'Basic Mount/Unmount',
+        passed,
+        duration,
+        `Mounted in ${result.duration}ms, unmounted in ${unmountResult.duration}ms`
+      );
+    }
+
+    async function testRepeatedMountUnmount() {
+      const start = performance.now();
+      const iterations = 10;
+      let passed = true;
+      let details = '';
+
+      for (let i = 0; i < iterations; i++) {
+        const loadResult = await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+        if (!loadResult.success) {
+          passed = false;
+          details = `Failed on iteration ${i + 1} during mount`;
+          break;
+        }
+
+        await sleep(50);
+
+        const unloadResult = await unloadMFE('reactRemote');
+        if (!unloadResult.success) {
+          passed = false;
+          details = `Failed on iteration ${i + 1} during unmount`;
+          break;
+        }
+
+        await sleep(50);
+      }
+
+      if (passed) {
+        details = `Successfully completed ${iterations} mount/unmount cycles`;
+      }
+
+      const duration = performance.now() - start;
+      reportTest('Repeated Mount/Unmount (10x)', passed, duration, details);
+    }
+
+    async function testCrossContamination() {
+      const start = performance.now();
+
+      // Load Pink
+      const pink1 = await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+      await sleep(100);
+
+      // Load Orange
+      const orange = await loadMFE('reactOrange', 'http://localhost:5002/remoteEntry.js', 'orange-container');
+      await sleep(100);
+
+      // Check if Pink is still working
+      const pinkContainer = document.getElementById('pink-container');
+      const orangeContainer = document.getElementById('orange-container');
+
+      const pinkStillMounted = pinkContainer.innerHTML.length > 0;
+      const orangeMounted = orangeContainer.innerHTML.length > 0;
+
+      // Unload Orange
+      await unloadMFE('reactOrange');
+      await sleep(100);
+
+      // Check if Pink is still working
+      const pinkStillAlive = pinkContainer.innerHTML.length > 0;
+
+      // Cleanup
+      await unloadMFE('reactRemote');
+
+      const passed = pink1.success && orange.success && pinkStillMounted && orangeMounted && pinkStillAlive;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Cross-Contamination Test',
+        passed,
+        duration,
+        `Pink survived Orange mount: ${pinkStillMounted}, Pink survived Orange unmount: ${pinkStillAlive}`
+      );
+    }
+
+    async function testParallelMount() {
+      const start = performance.now();
+
+      try {
+        const [pink, orange] = await Promise.all([
+          loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container'),
+          loadMFE('reactOrange', 'http://localhost:5002/remoteEntry.js', 'orange-container')
+        ]);
+
+        const passed = pink.success && orange.success;
+
+        await sleep(100);
+        await Promise.all([
+          unloadMFE('reactRemote'),
+          unloadMFE('reactOrange')
+        ]);
+
+        const duration = performance.now() - start;
+        reportTest(
+          'Parallel Mount',
+          passed,
+          duration,
+          `Both MFEs mounted in parallel successfully`
+        );
+      } catch (error) {
+        const duration = performance.now() - start;
+        reportTest('Parallel Mount', false, duration, 'Parallel mount failed', error.message);
+      }
+    }
+
+    async function testOutOfOrderUnmount() {
+      const start = performance.now();
+
+      // Load in order: Pink -> Orange
+      await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+      await sleep(100);
+      await loadMFE('reactOrange', 'http://localhost:5002/remoteEntry.js', 'orange-container');
+      await sleep(100);
+
+      // Unload in reverse order: Orange -> Pink
+      const orange = await unloadMFE('reactOrange');
+      await sleep(100);
+      const pink = await unloadMFE('reactRemote');
+
+      const passed = orange.success && pink.success;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Out-of-Order Unmount',
+        passed,
+        duration,
+        `Unmounted in reverse order successfully`
+      );
+    }
+
+    async function testRemountAfterUnmount() {
+      const start = performance.now();
+
+      // Mount -> Unmount -> Mount again
+      const mount1 = await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+      await sleep(100);
+      await unloadMFE('reactRemote');
+      await sleep(100);
+      const mount2 = await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+      await sleep(100);
+      await unloadMFE('reactRemote');
+
+      const passed = mount1.success && mount2.success;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Re-mount After Unmount',
+        passed,
+        duration,
+        `Remounted successfully after unmount`
+      );
+    }
+
+    async function runMessagingTests() {
+      logConsole('Starting Messaging Tests...', 'info');
+      totalTests = 5;
+
+      await testBasicMessaging();
+      await testMessageIsolation();
+      await testSubscriptionCleanup();
+      await testConcurrentMessages();
+      await testMessageFloodResilience();
+
+      logConsole('Messaging Tests Complete', 'success');
+    }
+
+    async function testBasicMessaging() {
+      const start = performance.now();
+
+      let receivedCount = 0;
+      const unsubscribe = globalEventBus.subscribeToMessages((event) => {
+        receivedCount++;
+      });
+
+      globalEventBus.sendMessage('test', 'Hello');
+      globalEventBus.sendMessage('test', 'World');
+
+      await sleep(100);
+      unsubscribe();
+
+      const passed = receivedCount === 2;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Basic Messaging',
+        passed,
+        duration,
+        `Received ${receivedCount}/2 messages`
+      );
+    }
+
+    async function testMessageIsolation() {
+      const start = performance.now();
+
+      let count1 = 0, count2 = 0;
+
+      const unsub1 = globalEventBus.subscribe('channel1', () => count1++);
+      const unsub2 = globalEventBus.subscribe('channel2', () => count2++);
+
+      globalEventBus.publish('channel1', {});
+      globalEventBus.publish('channel1', {});
+      globalEventBus.publish('channel2', {});
+
+      await sleep(100);
+
+      unsub1();
+      unsub2();
+
+      const passed = count1 === 2 && count2 === 1;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Message Isolation',
+        passed,
+        duration,
+        `Channel1: ${count1}/2, Channel2: ${count2}/1`
+      );
+    }
+
+    async function testSubscriptionCleanup() {
+      const start = performance.now();
+      const initialSubs = subscriptionCount;
+
+      const unsubs = [];
+      for (let i = 0; i < 10; i++) {
+        unsubs.push(globalEventBus.subscribe('test', () => {}));
+      }
+
+      const afterSub = subscriptionCount;
+
+      unsubs.forEach(unsub => unsub());
+
+      const afterUnsub = subscriptionCount;
+
+      const passed = (afterSub === initialSubs + 10) && (afterUnsub === initialSubs);
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Subscription Cleanup',
+        passed,
+        duration,
+        `Subscriptions: ${initialSubs} -> ${afterSub} -> ${afterUnsub}`
+      );
+    }
+
+    async function testConcurrentMessages() {
+      const start = performance.now();
+      let received = 0;
+
+      const unsub = globalEventBus.subscribeToMessages(() => received++);
+
+      const promises = [];
+      for (let i = 0; i < 100; i++) {
+        promises.push(Promise.resolve(globalEventBus.sendMessage('test', `msg${i}`)));
+      }
+
+      await Promise.all(promises);
+      await sleep(100);
+
+      unsub();
+
+      const passed = received === 100;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Concurrent Messages',
+        passed,
+        duration,
+        `Received ${received}/100 concurrent messages`
+      );
+    }
+
+    async function testMessageFloodResilience() {
+      const start = performance.now();
+      let received = 0;
+      let errors = 0;
+
+      const unsub = globalEventBus.subscribeToMessages(() => {
+        received++;
+        if (Math.random() < 0.01) {
+          throw new Error('Random handler error');
+        }
+      });
+
+      for (let i = 0; i < 1000; i++) {
+        globalEventBus.sendMessage('test', `flood${i}`);
+      }
+
+      await sleep(200);
+      unsub();
+
+      const passed = received === 1000;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Message Flood Resilience',
+        passed,
+        duration,
+        `Processed ${received}/1000 messages in ${duration}ms (${(1000 / duration * 1000).toFixed(0)} msg/sec)`
+      );
+    }
+
+    async function runMemoryTests() {
+      logConsole('Starting Memory Leak Tests...', 'info');
+      totalTests = 4;
+
+      await testMemoryLeakOnMount();
+      await testMemoryLeakOnMessaging();
+      await testDOMCleanup();
+      await testEventListenerCleanup();
+
+      logConsole('Memory Tests Complete', 'success');
+    }
+
+    async function testMemoryLeakOnMount() {
+      if (!performance.memory) {
+        reportTest('Memory Leak - Mount', false, 0, 'performance.memory not available');
+        return;
+      }
+
+      const start = performance.now();
+
+      // Force GC if available
+      if (global.gc) global.gc();
+
+      const initialMemory = performance.memory.usedJSHeapSize;
+
+      // Mount and unmount 20 times
+      for (let i = 0; i < 20; i++) {
+        await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+        await sleep(50);
+        await unloadMFE('reactRemote');
+        await sleep(50);
+      }
+
+      // Force GC if available
+      if (global.gc) global.gc();
+
+      const finalMemory = performance.memory.usedJSHeapSize;
+      const memoryGrowth = finalMemory - initialMemory;
+      const memoryGrowthMB = memoryGrowth / 1024 / 1024;
+
+      // Allow up to 5MB growth for 20 cycles
+      const passed = memoryGrowthMB < 5;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Memory Leak - Mount/Unmount',
+        passed,
+        duration,
+        `Memory growth: ${memoryGrowthMB.toFixed(2)}MB (threshold: 5MB)`
+      );
+    }
+
+    async function testMemoryLeakOnMessaging() {
+      if (!performance.memory) {
+        reportTest('Memory Leak - Messaging', false, 0, 'performance.memory not available');
+        return;
+      }
+
+      const start = performance.now();
+
+      if (global.gc) global.gc();
+      const initialMemory = performance.memory.usedJSHeapSize;
+
+      // Create and destroy many subscriptions
+      for (let i = 0; i < 1000; i++) {
+        const unsub = globalEventBus.subscribe('test', () => {});
+        globalEventBus.publish('test', { data: 'x'.repeat(100) });
+        unsub();
+      }
+
+      if (global.gc) global.gc();
+      const finalMemory = performance.memory.usedJSHeapSize;
+      const memoryGrowth = finalMemory - initialMemory;
+      const memoryGrowthMB = memoryGrowth / 1024 / 1024;
+
+      const passed = memoryGrowthMB < 2;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Memory Leak - Messaging',
+        passed,
+        duration,
+        `Memory growth: ${memoryGrowthMB.toFixed(2)}MB (threshold: 2MB)`
+      );
+    }
+
+    async function testDOMCleanup() {
+      const start = performance.now();
+
+      const initialNodes = document.querySelectorAll('*').length;
+
+      await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+      await sleep(100);
+      const withMFE = document.querySelectorAll('*').length;
+
+      await unloadMFE('reactRemote');
+      await sleep(100);
+      const afterUnmount = document.querySelectorAll('*').length;
+
+      // Allow some nodes to remain (e.g., script tags)
+      const nodeGrowth = afterUnmount - initialNodes;
+      const passed = nodeGrowth < 10;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'DOM Cleanup',
+        passed,
+        duration,
+        `Nodes: ${initialNodes} -> ${withMFE} -> ${afterUnmount} (growth: ${nodeGrowth})`
+      );
+    }
+
+    async function testEventListenerCleanup() {
+      const start = performance.now();
+      const initialSubs = subscriptionCount;
+
+      await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+      await sleep(100);
+      const withMFE = subscriptionCount;
+
+      await unloadMFE('reactRemote');
+      await sleep(100);
+      const afterUnmount = subscriptionCount;
+
+      const passed = afterUnmount === initialSubs;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Event Listener Cleanup',
+        passed,
+        duration,
+        `Subscriptions: ${initialSubs} -> ${withMFE} -> ${afterUnmount}`
+      );
+    }
+
+    async function runStressTests() {
+      logConsole('Starting Stress Tests...', 'warn');
+      totalTests = 3;
+
+      await testRapidSwitching();
+      await testHighFrequencyMessaging();
+      await testMemoryStress();
+
+      logConsole('Stress Tests Complete', 'success');
+    }
+
+    async function testRapidSwitching() {
+      const start = performance.now();
+      let failures = 0;
+
+      for (let i = 0; i < 50; i++) {
+        const result = await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+        if (!result.success) failures++;
+        await sleep(20);
+
+        const unloadResult = await unloadMFE('reactRemote');
+        if (!unloadResult.success) failures++;
+        await sleep(20);
+      }
+
+      const passed = failures === 0;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Rapid Switching (50x)',
+        passed,
+        duration,
+        `Completed 50 switches in ${duration}ms, failures: ${failures}`
+      );
+    }
+
+    async function testHighFrequencyMessaging() {
+      const start = performance.now();
+      let received = 0;
+
+      const unsub = globalEventBus.subscribeToMessages(() => received++);
+
+      for (let i = 0; i < 5000; i++) {
+        globalEventBus.sendMessage('test', `msg${i}`);
+      }
+
+      await sleep(500);
+      unsub();
+
+      const passed = received === 5000;
+      const duration = performance.now() - start;
+      const rate = (5000 / duration * 1000).toFixed(0);
+
+      reportTest(
+        'High Frequency Messaging',
+        passed,
+        duration,
+        `Processed ${received}/5000 messages at ${rate} msg/sec`
+      );
+    }
+
+    async function testMemoryStress() {
+      if (!performance.memory) {
+        reportTest('Memory Stress', false, 0, 'performance.memory not available');
+        return;
+      }
+
+      const start = performance.now();
+      if (global.gc) global.gc();
+      const initialMemory = performance.memory.usedJSHeapSize;
+
+      // Create memory pressure
+      for (let i = 0; i < 100; i++) {
+        await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+        globalEventBus.sendMessage('test', { data: 'x'.repeat(1000) });
+        await sleep(10);
+        await unloadMFE('reactRemote');
+        await sleep(10);
+      }
+
+      if (global.gc) global.gc();
+      const finalMemory = performance.memory.usedJSHeapSize;
+      const memoryGrowthMB = (finalMemory - initialMemory) / 1024 / 1024;
+
+      const passed = memoryGrowthMB < 10;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Memory Stress Test',
+        passed,
+        duration,
+        `Memory growth: ${memoryGrowthMB.toFixed(2)}MB after 100 cycles`
+      );
+    }
+
+    // Destructive tests
+    async function runRapidMountUnmount() {
+      logConsole('⚠️ Starting Rapid Mount/Unmount (100x)...', 'warn');
+      totalTests = 1;
+      const start = performance.now();
+      let failures = 0;
+
+      for (let i = 0; i < 100; i++) {
+        const load = await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+        if (!load.success) failures++;
+
+        const unload = await unloadMFE('reactRemote');
+        if (!unload.success) failures++;
+      }
+
+      const passed = failures === 0;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Rapid Mount/Unmount (100x)',
+        passed,
+        duration,
+        `Completed 100 cycles in ${duration}ms, failures: ${failures}, avg: ${(duration / 100).toFixed(2)}ms/cycle`
+      );
+    }
+
+    async function runParallelMFELoad() {
+      logConsole('⚠️ Starting Parallel MFE Load...', 'warn');
+      totalTests = 1;
+      const start = performance.now();
+
+      try {
+        const results = await Promise.all([
+          loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container'),
+          loadMFE('reactOrange', 'http://localhost:5002/remoteEntry.js', 'orange-container')
+        ]);
+
+        const passed = results.every(r => r.success);
+
+        await sleep(500);
+        await Promise.all([
+          unloadMFE('reactRemote'),
+          unloadMFE('reactOrange')
+        ]);
+
+        const duration = performance.now() - start;
+        reportTest(
+          'Parallel MFE Load',
+          passed,
+          duration,
+          `Both MFEs loaded in parallel successfully`
+        );
+      } catch (error) {
+        const duration = performance.now() - start;
+        reportTest('Parallel MFE Load', false, duration, 'Failed', error.message);
+      }
+    }
+
+    async function runMessageFlood() {
+      logConsole('⚠️ Starting Message Flood (1000 msgs/sec)...', 'warn');
+      totalTests = 1;
+      const start = performance.now();
+      let received = 0;
+
+      const unsub = globalEventBus.subscribeToMessages(() => received++);
+
+      const messageCount = 10000;
+      for (let i = 0; i < messageCount; i++) {
+        globalEventBus.sendMessage('flood', `msg${i}`);
+      }
+
+      await sleep(1000);
+      unsub();
+
+      const passed = received === messageCount;
+      const duration = performance.now() - start;
+      const rate = (messageCount / duration * 1000).toFixed(0);
+
+      reportTest(
+        'Message Flood',
+        passed,
+        duration,
+        `Processed ${received}/${messageCount} messages at ${rate} msg/sec`
+      );
+    }
+
+    async function runMemoryBomb() {
+      if (!performance.memory) {
+        alert('performance.memory not available. Run Chrome with --enable-precise-memory-info');
+        return;
+      }
+
+      logConsole('⚠️ Starting Memory Bomb...', 'warn');
+      totalTests = 1;
+      const start = performance.now();
+
+      if (global.gc) global.gc();
+      const initialMemory = performance.memory.usedJSHeapSize;
+
+      // Create massive memory pressure
+      for (let i = 0; i < 500; i++) {
+        const load = await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+
+        // Spam messages
+        for (let j = 0; j < 10; j++) {
+          globalEventBus.sendMessage('bomb', { data: 'x'.repeat(1000) });
+        }
+
+        await unloadMFE('reactRemote');
+      }
+
+      if (global.gc) global.gc();
+      const finalMemory = performance.memory.usedJSHeapSize;
+      const memoryGrowthMB = (finalMemory - initialMemory) / 1024 / 1024;
+
+      const passed = memoryGrowthMB < 20;
+      const duration = performance.now() - start;
+
+      reportTest(
+        'Memory Bomb (500 cycles)',
+        passed,
+        duration,
+        `Memory growth: ${memoryGrowthMB.toFixed(2)}MB (threshold: 20MB)`
+      );
+    }
+
+    async function runCustomStressTest() {
+      const iterations = parseInt(document.getElementById('iterations').value);
+      logConsole(`Running Custom Stress Test (${iterations} iterations)...`, 'info');
+      totalTests = 1;
+      const start = performance.now();
+      let failures = 0;
+
+      for (let i = 0; i < iterations; i++) {
+        const load = await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+        if (!load.success) failures++;
+        await sleep(10);
+
+        const unload = await unloadMFE('reactRemote');
+        if (!unload.success) failures++;
+        await sleep(10);
+      }
+
+      const passed = failures === 0;
+      const duration = performance.now() - start;
+
+      reportTest(
+        `Custom Stress (${iterations}x)`,
+        passed,
+        duration,
+        `Completed ${iterations} cycles, failures: ${failures}, avg: ${(duration / iterations).toFixed(2)}ms/cycle`
+      );
+    }
+
+    async function runAllTests() {
+      logConsole('🚀 Running All Tests...', 'info');
+      clearTestResults();
+
+      await runLifecycleTests();
+      await sleep(500);
+      await runMessagingTests();
+      await sleep(500);
+      await runMemoryTests();
+      await sleep(500);
+      await runStressTests();
+
+      logConsole('✅ All Tests Complete!', 'success');
+      showSummary();
+    }
+
+    function showSummary() {
+      const passRate = testsRun > 0 ? ((testsPassed / testsRun) * 100).toFixed(1) : 0;
+      const summary = document.createElement('div');
+      summary.className = `summary-banner ${testsFailed > 0 ? 'fail' : ''}`;
+      summary.innerHTML = `
+        <h2>${testsFailed === 0 ? '✅ All Tests Passed!' : '⚠️ Some Tests Failed'}</h2>
+        <div class="summary-stats">
+          <div class="summary-stat">
+            <div class="summary-stat-value" style="color: #3fb950">${testsPassed}</div>
+            <div class="summary-stat-label">Passed</div>
+          </div>
+          <div class="summary-stat">
+            <div class="summary-stat-value" style="color: #f85149">${testsFailed}</div>
+            <div class="summary-stat-label">Failed</div>
+          </div>
+          <div class="summary-stat">
+            <div class="summary-stat-value" style="color: #58a6ff">${passRate}%</div>
+            <div class="summary-stat-label">Pass Rate</div>
+          </div>
+        </div>
+      `;
+
+      const results = document.getElementById('testResults');
+      results.insertBefore(summary, results.firstChild);
+    }
+
+    function clearTestResults() {
+      document.getElementById('testResults').innerHTML = '';
+      testsRun = 0;
+      testsPassed = 0;
+      testsFailed = 0;
+      totalTests = 0;
+      updateStats();
+    }
+
+    function clearAll() {
+      clearTestResults();
+      document.getElementById('consoleOutput').innerHTML = '';
+
+      // Unload all MFEs
+      Array.from(loadedMFEs.keys()).forEach(name => {
+        unloadMFE(name);
+      });
+
+      // Clear event bus
+      globalEventBus.clear();
+
+      logConsole('Cleared all tests and state', 'info');
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // Check server connectivity
+    async function checkServers() {
+      logConsole('Checking server connectivity...', 'info');
+
+      const servers = [
+        { name: 'React Pink (Rspack)', url: 'http://localhost:5001/remoteEntry.js' },
+        { name: 'React Orange (Rspack)', url: 'http://localhost:5002/remoteEntry.js' }
+      ];
+
+      for (const server of servers) {
+        try {
+          const response = await fetch(server.url, { method: 'HEAD', mode: 'no-cors' });
+          logConsole(`✓ ${server.name} is reachable`, 'success');
+        } catch (error) {
+          logConsole(`✗ ${server.name} is NOT reachable at ${server.url}`, 'error');
+          logConsole(`  Please ensure the server is running: cd ${server.name.includes('Pink') ? 'react-remote' : 'react-orange'} && npm start`, 'warn');
+        }
+      }
+
+      logConsole('Server connectivity check complete', 'info');
+    }
+
+    // Update memory every 2 seconds
+    setInterval(updateStats, 2000);
+
+    // Initial setup
+    logConsole('Destructive Test Suite Ready', 'success');
+    logConsole('Servers required: React Pink (5001), React Orange (5002)', 'info');
+
+    // Check server connectivity on load
+    setTimeout(checkServers, 1000);
+  </script>
+</body>
+</html>
