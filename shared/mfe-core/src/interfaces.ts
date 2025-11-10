@@ -69,6 +69,12 @@ export interface MFEInstance {
 
   /** Health check function */
   isHealthy: () => boolean;
+
+  /** Get detailed health status (optional, for telemetry) */
+  getHealth?: () => any;
+
+  /** Get telemetry summary (optional, for telemetry) */
+  getTelemetry?: () => any;
 }
 
 /**

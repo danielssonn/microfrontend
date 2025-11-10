@@ -126,6 +126,28 @@ export class AppComponent implements OnInit, OnDestroy {
       this.mfeInstance = await this.mfeLoader.loadMFE(config, container);
 
       console.log(`[Angular] ${mfe} React MFE loaded and mounted successfully!`, this.mfeInstance);
+      console.log(`[Angular] MFE Instance details:`, {
+        id: this.mfeInstance.id,
+        mfeName: this.mfeInstance.mfeName,
+        hasGetHealth: typeof this.mfeInstance.getHealth === 'function',
+        hasGetTelemetry: typeof this.mfeInstance.getTelemetry === 'function',
+        hasIsHealthy: typeof this.mfeInstance.isHealthy === 'function'
+      });
+
+      // Try calling telemetry methods
+      if (typeof this.mfeInstance.getTelemetry === 'function') {
+        const telemetry = this.mfeInstance.getTelemetry();
+        console.log(`[Angular] Telemetry data:`, telemetry);
+      } else {
+        console.warn(`[Angular] getTelemetry method not found on instance!`);
+      }
+
+      if (typeof this.mfeInstance.getHealth === 'function') {
+        const health = this.mfeInstance.getHealth();
+        console.log(`[Angular] Health data:`, health);
+      } else {
+        console.warn(`[Angular] getHealth method not found on instance!`);
+      }
     } catch (error) {
       console.error('[Angular] Error loading React remote:', error);
       console.error('[Angular] Error details:', error instanceof Error ? error.stack : error);
