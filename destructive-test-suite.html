@@ -563,6 +563,7 @@
     // Test state
     let testsRun = 0;
     const initializedContainers = new Map(); // Track initialized Module Federation containers
+    const moduleCache = new Map(); // Cache loaded modules to prevent duplicate instantiation
     let testsPassed = 0;
     let testsFailed = 0;
     let totalTests = 0;
@@ -769,9 +770,17 @@
           logConsole(`Initialized Module Federation container: ${scope}`, 'info');
         }
 
-        // Get module
-        const factory = await container.get('./App');
-        const module = factory();
+        // Get module - cache it to prevent duplicate instantiation
+        // Each factory() call creates a new module instance that MF caches
+        let module;
+        if (moduleCache.has(scope)) {
+          module = moduleCache.get(scope);
+        } else {
+          const factory = await container.get('./App');
+          module = factory();
+          moduleCache.set(scope, module);
+          logConsole(`Cached module for scope: ${scope}`, 'info');
+        }
 
         // Mount
         const containerEl = document.getElementById(containerId);
@@ -1812,9 +1821,10 @@
       // Clear event bus
       globalEventBus.clear();
 
-      // Clear initialized containers cache
+      // Clear Module Federation caches
       // Note: Page reload required to fully reset Module Federation state
       initializedContainers.clear();
+      moduleCache.clear();
 
       logConsole('Cleared all tests and state', 'info');
     }
