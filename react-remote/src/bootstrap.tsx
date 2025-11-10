@@ -13,13 +13,30 @@ import { MFETelemetry, telemetryRegistry } from '../../shared/mfe-core/src/telem
 export async function mount(container: HTMLElement, context: any): Promise<any> {
   // Generate unique instance ID
   const instanceId = `react-pink-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const mfeName = context.metadata?.mfeName || 'reactRemote';
 
-  // Initialize telemetry for this instance
-  const telemetry = new MFETelemetry(
-    context.metadata?.mfeName || 'reactRemote',
-    instanceId
-  );
-  telemetryRegistry.register(instanceId, telemetry);
+  // Get or create persistent telemetry for this MFE
+  const globalRegistry = (window as any).__MFE_TELEMETRY__;
+  const telemetry = globalRegistry
+    ? globalRegistry.getOrCreatePersistentTelemetry(mfeName, instanceId)
+    : new MFETelemetry(mfeName, instanceId);
+
+  console.log('[React Bootstrap] About to register telemetry:', {
+    instanceId,
+    mfeName,
+    registryRef: telemetryRegistry,
+    windowRegistry: (window as any).__MFE_TELEMETRY__,
+    areTheSame: telemetryRegistry === (window as any).__MFE_TELEMETRY__
+  });
+
+  // ALWAYS use window.__MFE_TELEMETRY__ to avoid multiple registry instances
+  if (globalRegistry) {
+    globalRegistry.register(instanceId, telemetry);
+  } else {
+    console.error('[React Bootstrap] window.__MFE_TELEMETRY__ not available!');
+    // Fallback to imported registry
+    telemetryRegistry.register(instanceId, telemetry);
+  }
 
   telemetry.startMount();
   console.log('[React Bootstrap] Mounting with context:', context);
@@ -51,7 +68,7 @@ export async function mount(container: HTMLElement, context: any): Promise<any> 
     telemetry.endMount();
 
     // Return MFEInstance with instance-specific state
-    return {
+    const instance = {
       _internal: { root, container, telemetry },
       id: instanceId,
       mfeName: context.metadata?.mfeName || 'reactRemote',
@@ -63,6 +80,17 @@ export async function mount(container: HTMLElement, context: any): Promise<any> 
       getHealth: () => telemetry.getHealthCheck(),
       getTelemetry: () => telemetry.getSummary()
     };
+
+    console.log('[React Bootstrap] MFE Instance created with telemetry methods:', {
+      id: instance.id,
+      mfeName: instance.mfeName,
+      hasGetHealth: typeof instance.getHealth === 'function',
+      hasGetTelemetry: typeof instance.getTelemetry === 'function',
+      hasIsHealthy: typeof instance.isHealthy === 'function',
+      telemetrySummary: instance.getTelemetry()
+    });
+
+    return instance;
   } catch (error) {
     telemetry.recordError(error as Error, 'mount');
     console.error('[React Bootstrap] Mount failed:', error);
@@ -111,8 +139,14 @@ export async function unmount(instance: any): Promise<void> {
 
     telemetry.endUnmount();
 
-    // Unregister telemetry from global registry
-    telemetryRegistry.unregister(instance.id);
+    // Unregister telemetry from global registry (use window global)
+    const globalRegistry = (window as any).__MFE_TELEMETRY__;
+    if (globalRegistry) {
+      globalRegistry.unregister(instance.id);
+    } else {
+      console.warn('[React Bootstrap] window.__MFE_TELEMETRY__ not available for unregister');
+      telemetryRegistry.unregister(instance.id);
+    }
 
     // Null out telemetry reference
     instance._internal.telemetry = null;

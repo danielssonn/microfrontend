@@ -5,6 +5,17 @@
  * based on thresholds established during destructive testing.
  */
 
+// Extend Performance interface to include memory property (non-standard, Chrome only)
+declare global {
+  interface Performance {
+    memory?: {
+      usedJSHeapSize: number;
+      totalJSHeapSize: number;
+      jsHeapSizeLimit: number;
+    };
+  }
+}
+
 /**
  * Health status levels
  */
@@ -139,13 +150,21 @@ export class MFETelemetry {
   private unmountTimes: number[] = [];
   private errors: number = 0;
   private operations: number = 0;
-  private memoryBaseline: number = 0;
+  private memoryAtMount: number = 0;
+  private memoryAfterMount: number = 0;
+  private memoryAfterUnmount: number = 0;
   private memoryPeak: number = 0;
+  private memoryBaseline: number = 0; // Initial memory before first mount
+
+  // Leak detection tracking
+  private memoryAfterUnmountHistory: number[] = []; // Track memory after each unmount
+  private memoryRetained: number = 0; // Memory not released after unmount
 
   // Lifecycle tracking
   private mountStartTime: number = 0;
   private mountedAt: number = 0;
   private cycleCount: number = 0;
+  private isMounted: boolean = false;
 
   constructor(
     mfeName: string,
@@ -155,9 +174,6 @@ export class MFETelemetry {
     this.mfeName = mfeName;
     this.instanceId = instanceId;
     this.thresholds = this.mergeThresholds(thresholds);
-
-    // Record memory baseline
-    this.recordMemoryBaseline();
   }
 
   /**
@@ -172,21 +188,20 @@ export class MFETelemetry {
   }
 
   /**
-   * Record memory baseline on initialization
-   */
-  private recordMemoryBaseline(): void {
-    if (typeof window !== 'undefined' && window.performance?.memory) {
-      this.memoryBaseline = window.performance.memory.usedJSHeapSize;
-      this.memoryPeak = this.memoryBaseline;
-    }
-  }
-
-  /**
    * Start tracking mount operation
    */
   startMount(): void {
     this.mountStartTime = performance.now();
     this.operations++;
+    this.memoryAtMount = this.getCurrentMemory();
+
+    // Capture baseline on first mount
+    if (this.memoryBaseline === 0) {
+      this.memoryBaseline = this.memoryAtMount;
+      console.log(`[${this.mfeName}] Memory baseline set: ${(this.memoryBaseline / 1024 / 1024).toFixed(2)}MB`);
+    }
+
+    this.isMounted = true;
   }
 
   /**
@@ -203,6 +218,12 @@ export class MFETelemetry {
     this.mountedAt = Date.now();
     this.mountStartTime = 0;
 
+    // Record memory after mount
+    this.memoryAfterMount = this.getCurrentMemory();
+    if (this.memoryAfterMount > this.memoryPeak) {
+      this.memoryPeak = this.memoryAfterMount;
+    }
+
     this.recordMetric({
       timestamp: Date.now(),
       mfeName: this.mfeName,
@@ -210,11 +231,14 @@ export class MFETelemetry {
       metricType: 'mount',
       value: duration,
       metadata: {
-        cycleCount: this.cycleCount
+        cycleCount: this.cycleCount,
+        memoryAtMount: this.memoryAtMount,
+        memoryAfterMount: this.memoryAfterMount,
+        memoryDelta: this.memoryAfterMount - this.memoryAtMount
       }
     });
 
-    console.log(`[${this.mfeName}] Mounted in ${duration.toFixed(2)}ms`);
+    console.log(`[${this.mfeName}] Mounted in ${duration.toFixed(2)}ms, memory: ${(this.memoryAfterMount / 1024 / 1024).toFixed(2)}MB`);
   }
 
   /**
@@ -223,6 +247,7 @@ export class MFETelemetry {
   startUnmount(): void {
     this.mountStartTime = performance.now(); // Reuse for unmount timing
     this.cycleCount++;
+    this.isMounted = false;
   }
 
   /**
@@ -239,7 +264,12 @@ export class MFETelemetry {
     this.mountStartTime = 0;
 
     // Record memory after unmount
-    this.recordMemory();
+    this.memoryAfterUnmount = this.getCurrentMemory();
+    this.memoryAfterUnmountHistory.push(this.memoryAfterUnmount);
+
+    // Calculate memory retained (leaked) after unmount
+    // Memory should return close to baseline, excess indicates a leak
+    this.memoryRetained = Math.max(0, this.memoryAfterUnmount - this.memoryBaseline);
 
     this.recordMetric({
       timestamp: Date.now(),
@@ -249,11 +279,13 @@ export class MFETelemetry {
       value: duration,
       metadata: {
         cycleCount: this.cycleCount,
-        memory: this.getCurrentMemory()
+        memoryAfterUnmount: this.memoryAfterUnmount,
+        memoryRetained: this.memoryRetained,
+        memoryBaseline: this.memoryBaseline
       }
     });
 
-    console.log(`[${this.mfeName}] Unmounted in ${duration.toFixed(2)}ms`);
+    console.log(`[${this.mfeName}] Unmounted in ${duration.toFixed(2)}ms, memory: ${(this.memoryAfterUnmount / 1024 / 1024).toFixed(2)}MB, retained: ${(this.memoryRetained / 1024 / 1024).toFixed(2)}MB`);
   }
 
   /**
@@ -296,9 +328,7 @@ export class MFETelemetry {
       metricType: 'memory',
       value: memory,
       metadata: {
-        baseline: this.memoryBaseline,
         peak: this.memoryPeak,
-        growth: memory - this.memoryBaseline,
         cycleCount: this.cycleCount
       }
     });
@@ -350,37 +380,90 @@ export class MFETelemetry {
   }
 
   /**
-   * Get memory growth per cycle
+   * Calculate memory trend (growth over cycles)
+   * Returns bytes per cycle - positive means growing leak
    */
-  private getMemoryPerCycle(): number {
-    if (this.cycleCount === 0) return 0;
-    const currentMemory = this.getCurrentMemory();
-    const growth = currentMemory - this.memoryBaseline;
-    return growth / this.cycleCount;
+  private getMemoryTrend(): number {
+    if (this.memoryAfterUnmountHistory.length < 2) return 0;
+
+    // Use linear regression to detect trend
+    const n = this.memoryAfterUnmountHistory.length;
+    const xSum = (n * (n - 1)) / 2; // Sum of 0,1,2,...,n-1
+    const ySum = this.memoryAfterUnmountHistory.reduce((a, b) => a + b, 0);
+    const xySum = this.memoryAfterUnmountHistory.reduce((sum, y, x) => sum + x * y, 0);
+    const xSquaredSum = (n * (n - 1) * (2 * n - 1)) / 6; // Sum of 0²,1²,2²,...,(n-1)²
+
+    // Slope = (n*xySum - xSum*ySum) / (n*xSquaredSum - xSum²)
+    const slope = (n * xySum - xSum * ySum) / (n * xSquaredSum - xSum * xSum);
+
+    return slope;
+  }
+
+  /**
+   * Detect if there's a memory leak
+   */
+  private hasMemoryLeak(): boolean {
+    // Leak indicators:
+    // 1. Memory trend is positive (growing)
+    // 2. Retained memory exceeds threshold (5MB)
+    const trend = this.getMemoryTrend();
+    const leakThreshold = 5 * 1024 * 1024; // 5MB
+
+    return trend > 100 * 1024 || this.memoryRetained > leakThreshold; // 100KB/cycle trend or 5MB retained
+  }
+
+  /**
+   * Get leak severity rating
+   */
+  private getLeakSeverity(): 'none' | 'minor' | 'moderate' | 'severe' {
+    if (!this.hasMemoryLeak()) return 'none';
+
+    const trend = this.getMemoryTrend();
+    const trendKB = trend / 1024;
+    const retainedMB = this.memoryRetained / 1024 / 1024;
+
+    // Severe: >500KB/cycle trend or >10MB retained
+    if (trendKB > 500 || retainedMB > 10) return 'severe';
+
+    // Moderate: >250KB/cycle trend or >7MB retained
+    if (trendKB > 250 || retainedMB > 7) return 'moderate';
+
+    // Minor: any detectable leak
+    return 'minor';
   }
 
   /**
    * Perform health check
    */
   getHealthCheck(): HealthCheck {
-    const memoryPerCycle = this.getMemoryPerCycle();
+    const currentMemory = this.getCurrentMemory();
     const avgMountTime = this.getAvgMountTime();
     const avgUnmountTime = this.getAvgUnmountTime();
     const errorRate = this.getErrorRate();
 
-    // Memory health
+    // Memory health based on leak detection, not absolute values
+    // (absolute memory measures entire browser tab, not individual MFE)
     let memoryStatus = HealthStatus.HEALTHY;
-    let memoryMessage = `Memory growth: ${(memoryPerCycle / 1024).toFixed(2)}KB/cycle`;
+    let memoryMessage = this.isMounted
+      ? `Memory: ${(currentMemory / 1024 / 1024).toFixed(2)}MB`
+      : 'Not mounted';
 
-    if (memoryPerCycle > this.thresholds.memory.critical) {
-      memoryStatus = HealthStatus.CRITICAL;
-      memoryMessage = `CRITICAL: ${(memoryPerCycle / 1024).toFixed(2)}KB/cycle (threshold: ${(this.thresholds.memory.critical / 1024).toFixed(0)}KB)`;
-    } else if (memoryPerCycle > this.thresholds.memory.warning) {
-      memoryStatus = HealthStatus.DEGRADED;
-      memoryMessage = `WARNING: ${(memoryPerCycle / 1024).toFixed(2)}KB/cycle (threshold: ${(this.thresholds.memory.warning / 1024).toFixed(0)}KB)`;
-    } else if (memoryPerCycle > this.thresholds.memory.normal) {
-      memoryStatus = HealthStatus.DEGRADED;
-      memoryMessage = `Elevated: ${(memoryPerCycle / 1024).toFixed(2)}KB/cycle (threshold: ${(this.thresholds.memory.normal / 1024).toFixed(0)}KB)`;
+    // Check for memory leaks instead of absolute thresholds
+    if (this.hasMemoryLeak()) {
+      const severity = this.getLeakSeverity();
+      const retainedMB = this.memoryRetained / 1024 / 1024;
+      const trendMB = this.getMemoryTrend() / 1024 / 1024;
+
+      if (severity === 'severe') {
+        memoryStatus = HealthStatus.CRITICAL;
+        memoryMessage = `SEVERE LEAK: ${retainedMB.toFixed(2)}MB retained, ${trendMB.toFixed(2)}MB/cycle trend`;
+      } else if (severity === 'moderate') {
+        memoryStatus = HealthStatus.DEGRADED;
+        memoryMessage = `MODERATE LEAK: ${retainedMB.toFixed(2)}MB retained, ${trendMB.toFixed(2)}MB/cycle trend`;
+      } else if (severity === 'minor') {
+        memoryStatus = HealthStatus.DEGRADED;
+        memoryMessage = `Minor leak: ${retainedMB.toFixed(2)}MB retained, ${trendMB.toFixed(2)}MB/cycle trend`;
+      }
     }
 
     // Performance health
@@ -427,8 +510,8 @@ export class MFETelemetry {
       checks: {
         memory: {
           status: memoryStatus,
-          current: memoryPerCycle,
-          threshold: this.thresholds.memory.normal,
+          current: currentMemory,
+          threshold: 30 * 1024 * 1024, // 30MB threshold in bytes
           message: memoryMessage
         },
         performance: {
@@ -460,6 +543,7 @@ export class MFETelemetry {
    */
   getSummary() {
     const healthCheck = this.getHealthCheck();
+    const currentMemory = this.getCurrentMemory();
 
     return {
       mfeName: this.mfeName,
@@ -470,6 +554,7 @@ export class MFETelemetry {
       operations: this.operations,
       errors: this.errors,
       errorRate: this.getErrorRate(),
+      isMounted: this.isMounted,
       performance: {
         avgMountTime: this.getAvgMountTime(),
         avgUnmountTime: this.getAvgUnmountTime(),
@@ -477,11 +562,29 @@ export class MFETelemetry {
         lastUnmountTime: this.unmountTimes[this.unmountTimes.length - 1] || 0
       },
       memory: {
+        // Absolute measurements
         baseline: this.memoryBaseline,
-        current: this.getCurrentMemory(),
+        baselineMB: this.memoryBaseline / 1024 / 1024,
+        current: this.isMounted ? currentMemory : 0,
+        currentMB: this.isMounted ? currentMemory / 1024 / 1024 : 0,
+        afterMount: this.memoryAfterMount,
+        afterMountMB: this.memoryAfterMount / 1024 / 1024,
+        afterUnmount: this.memoryAfterUnmount,
+        afterUnmountMB: this.memoryAfterUnmount / 1024 / 1024,
         peak: this.memoryPeak,
-        growth: this.getCurrentMemory() - this.memoryBaseline,
-        perCycle: this.getMemoryPerCycle()
+        peakMB: this.memoryPeak / 1024 / 1024,
+
+        // Delta measurements
+        mountDelta: this.memoryAfterMount - this.memoryAtMount,
+        mountDeltaMB: (this.memoryAfterMount - this.memoryAtMount) / 1024 / 1024,
+
+        // Leak detection
+        retained: this.memoryRetained,
+        retainedMB: this.memoryRetained / 1024 / 1024,
+        trend: this.getMemoryTrend(),
+        trendMB: this.getMemoryTrend() / 1024 / 1024,
+        hasLeak: this.hasMemoryLeak(),
+        leakSeverity: this.getLeakSeverity()
       },
       health: healthCheck
     };
@@ -507,7 +610,14 @@ export class MFETelemetry {
     this.errors = 0;
     this.operations = 0;
     this.cycleCount = 0;
-    this.recordMemoryBaseline();
+    this.memoryAtMount = 0;
+    this.memoryAfterMount = 0;
+    this.memoryAfterUnmount = 0;
+    this.memoryPeak = 0;
+    this.memoryBaseline = 0;
+    this.memoryAfterUnmountHistory = [];
+    this.memoryRetained = 0;
+    this.isMounted = false;
 
     console.log(`[${this.mfeName}] Telemetry reset`);
   }
@@ -519,13 +629,48 @@ export class MFETelemetry {
  */
 class TelemetryRegistry {
   private telemetry = new Map<string, MFETelemetry>();
+  private telemetryByMfeName = new Map<string, MFETelemetry>();
 
   register(instanceId: string, telemetry: MFETelemetry): void {
     this.telemetry.set(instanceId, telemetry);
+    console.log(`[TelemetryRegistry] Registered instance: ${instanceId}`, {
+      totalInstances: this.telemetry.size,
+      allInstanceIds: Array.from(this.telemetry.keys()),
+      registryRef: this
+    });
   }
 
   unregister(instanceId: string): void {
+    const existed = this.telemetry.has(instanceId);
     this.telemetry.delete(instanceId);
+    console.log(`[TelemetryRegistry] Unregistered instance: ${instanceId}`, {
+      existed,
+      totalInstances: this.telemetry.size,
+      remainingInstanceIds: Array.from(this.telemetry.keys()),
+      registryRef: this
+    });
+  }
+
+  /**
+   * Get or create persistent telemetry for an MFE name
+   * This allows telemetry to persist across instance remounts
+   */
+  getOrCreatePersistentTelemetry(mfeName: string, instanceId: string): MFETelemetry {
+    let telemetry = this.telemetryByMfeName.get(mfeName);
+
+    if (!telemetry) {
+      // Create new telemetry for this MFE
+      telemetry = new MFETelemetry(mfeName, instanceId);
+      this.telemetryByMfeName.set(mfeName, telemetry);
+      console.log(`[TelemetryRegistry] Created persistent telemetry for ${mfeName}`);
+    } else {
+      console.log(`[TelemetryRegistry] Reusing persistent telemetry for ${mfeName}`, {
+        previousCycles: (telemetry as any).cycleCount,
+        newInstanceId: instanceId
+      });
+    }
+
+    return telemetry;
   }
 
   get(instanceId: string): MFETelemetry | undefined {
@@ -533,7 +678,13 @@ class TelemetryRegistry {
   }
 
   getAll(): MFETelemetry[] {
-    return Array.from(this.telemetry.values());
+    const all = Array.from(this.telemetry.values());
+    console.log(`[TelemetryRegistry] getAll() called`, {
+      count: all.length,
+      instanceIds: Array.from(this.telemetry.keys()),
+      registryRef: this
+    });
+    return all;
   }
 
   getAllHealthChecks(): HealthCheck[] {
@@ -563,5 +714,18 @@ declare global {
 
 // Make registry available globally for debugging
 if (typeof window !== 'undefined') {
-  window.__MFE_TELEMETRY__ = telemetryRegistry;
+  // Only set if not already set (avoid overwriting existing registry)
+  if (!window.__MFE_TELEMETRY__) {
+    window.__MFE_TELEMETRY__ = telemetryRegistry;
+    console.log('[TelemetryRegistry] Global registry initialized on window', {
+      registryRef: telemetryRegistry,
+      windowRef: window
+    });
+  } else {
+    console.log('[TelemetryRegistry] Global registry already exists on window, reusing it', {
+      existingRegistryRef: window.__MFE_TELEMETRY__,
+      localRegistryRef: telemetryRegistry,
+      areTheSame: window.__MFE_TELEMETRY__ === telemetryRegistry
+    });
+  }
 }
