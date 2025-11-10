@@ -12,7 +12,7 @@ echo "=================================="
 echo ""
 
 # Check if dependencies are installed
-if [ ! -d "react-remote/node_modules" ] || [ ! -d "angular-host/node_modules" ]; then
+if [ ! -d "react-remote/node_modules" ] || [ ! -d "react-orange/node_modules" ] || [ ! -d "angular-host/node_modules" ]; then
     echo -e "${RED}Dependencies not installed. Running setup first...${NC}"
     ./setup.sh
 fi
@@ -34,19 +34,31 @@ if check_port 5001; then
     sleep 2
 fi
 
+if check_port 5002; then
+    echo -e "${BLUE}Killing existing process on port 5002...${NC}"
+    kill -9 $(lsof -ti:5002)
+    sleep 2
+fi
+
 if check_port 4200; then
     echo -e "${BLUE}Killing existing process on port 4200...${NC}"
     kill -9 $(lsof -ti:4200)
     sleep 2
 fi
 
-echo -e "${BLUE}Starting React Remote on port 5001...${NC}"
+echo -e "${BLUE}Starting React Remote (Pink) on port 5001...${NC}"
 cd react-remote
 npm start &
-REACT_PID=$!
+REACT_PINK_PID=$!
 cd ..
 
-echo -e "${BLUE}Waiting for React Remote to initialize...${NC}"
+echo -e "${BLUE}Starting React Remote (Orange) on port 5002...${NC}"
+cd react-orange
+npm start &
+REACT_ORANGE_PID=$!
+cd ..
+
+echo -e "${BLUE}Waiting for React Remotes to initialize...${NC}"
 sleep 8
 
 echo -e "${BLUE}Starting Angular Host on port 4200...${NC}"
@@ -60,25 +72,28 @@ echo "=================================="
 echo -e "${GREEN}Applications are running!${NC}"
 echo "=================================="
 echo ""
-echo -e "${GREEN}✓ React Remote:${NC} http://localhost:5001"
+echo -e "${GREEN}✓ React Remote (Pink):${NC} http://localhost:5001"
+echo -e "${GREEN}✓ React Remote (Orange):${NC} http://localhost:5002"
 echo -e "${GREEN}✓ Angular Host:${NC} http://localhost:4200"
 echo ""
 echo -e "${BLUE}Open http://localhost:4200 in your browser${NC}"
 echo ""
-echo "Press Ctrl+C to stop both applications"
+echo "Press Ctrl+C to stop all applications"
 echo "=================================="
 echo ""
 
-# Handle Ctrl+C to stop both applications
+# Handle Ctrl+C to stop all applications
 cleanup() {
     echo ""
     echo -e "${BLUE}Stopping applications...${NC}"
-    kill $REACT_PID 2>/dev/null
+    kill $REACT_PINK_PID 2>/dev/null
+    kill $REACT_ORANGE_PID 2>/dev/null
     kill $ANGULAR_PID 2>/dev/null
 
     # Force kill if still running
     sleep 2
     kill -9 $(lsof -ti:5001) 2>/dev/null
+    kill -9 $(lsof -ti:5002) 2>/dev/null
     kill -9 $(lsof -ti:4200) 2>/dev/null
 
     echo -e "${GREEN}Applications stopped${NC}"

@@ -1,5 +1,7 @@
 import { Component, OnInit, OnDestroy, ViewChild, ViewContainerRef, ComponentRef } from '@angular/core';
 import { EventBusService, MessageEvent } from './event-bus.service';
+import { MFELoaderService } from './mfe-loader.service';
+import { MFEInstance } from 'mfe-core';
 
 @Component({
   selector: 'app-root',
@@ -13,10 +15,15 @@ export class AppComponent implements OnInit, OnDestroy {
   messageInput = '';
   receivedMessage = '';
   lastMessageFrom = '';
+  currentMFE: 'pink' | 'orange' = 'pink';
 
   private unsubscribe?: () => void;
+  private mfeInstance?: MFEInstance;
 
-  constructor(private eventBus: EventBusService) {
+  constructor(
+    private eventBus: EventBusService,
+    private mfeLoader: MFELoaderService
+  ) {
     console.log('[Angular] AppComponent constructor called');
   }
 
@@ -37,13 +44,23 @@ export class AppComponent implements OnInit, OnDestroy {
     // Load React remote after a short delay to ensure everything is initialized
     setTimeout(() => {
       console.log('[Angular] Timeout triggered, loading React remote now...');
-      this.loadReactRemote();
+      this.loadMFE(this.currentMFE);
     }, 1000);
   }
 
-  ngOnDestroy(): void {
+  async ngOnDestroy(): Promise<void> {
     if (this.unsubscribe) {
       this.unsubscribe();
+    }
+
+    // Unload the MFE if it was loaded
+    if (this.mfeInstance) {
+      try {
+        await this.mfeLoader.unloadMFE(this.mfeInstance.mfeName);
+        console.log('[Angular] MFE unloaded successfully');
+      } catch (error) {
+        console.error('[Angular] Error unloading MFE:', error);
+      }
     }
   }
 
@@ -55,9 +72,27 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async loadReactRemote(): Promise<void> {
+  async switchMFE(mfe: 'pink' | 'orange'): Promise<void> {
+    console.log(`[Angular] Switching MFE to: ${mfe}`);
+
+    // Unload current MFE if loaded
+    if (this.mfeInstance) {
+      try {
+        await this.mfeLoader.unloadMFE(this.mfeInstance.mfeName);
+        console.log('[Angular] Current MFE unloaded');
+      } catch (error) {
+        console.error('[Angular] Error unloading current MFE:', error);
+      }
+    }
+
+    // Update current MFE and load new one
+    this.currentMFE = mfe;
+    await this.loadMFE(mfe);
+  }
+
+  private async loadMFE(mfe: 'pink' | 'orange'): Promise<void> {
     try {
-      console.log('[Angular] loadReactRemote() called');
+      console.log(`[Angular] loadMFE() called for ${mfe} - using MFE Abstraction Layer`);
       console.log('[Angular] Looking for react-container element...');
 
       const container = document.getElementById('react-container');
@@ -68,21 +103,29 @@ export class AppComponent implements OnInit, OnDestroy {
       }
 
       console.log('[Angular] react-container found:', container);
-      console.log('[Angular] Attempting to load React remote from Module Federation...');
+      console.log(`[Angular] Loading ${mfe} React MFE via MFELoaderService...`);
 
-      // @ts-ignore
-      const reactRemote = await import('reactRemote/App');
-      console.log('[Angular] React remote loaded successfully!', reactRemote);
+      // Determine which MFE to load based on selection
+      const config = mfe === 'pink'
+        ? {
+            name: 'reactRemote',
+            remoteUrl: 'http://localhost:5001/remoteEntry.js',
+            module: './App',
+            framework: 'react' as const,
+            version: '1.0.0'
+          }
+        : {
+            name: 'reactOrange',
+            remoteUrl: 'http://localhost:5002/remoteEntry.js',
+            module: './App',
+            framework: 'react' as const,
+            version: '1.0.0'
+          };
 
-      if (reactRemote && reactRemote.mount) {
-        console.log('[Angular] Calling reactRemote.mount()...');
-        reactRemote.mount(container, {
-          eventBus: this.eventBus
-        });
-        console.log('[Angular] React app mounted successfully!');
-      } else {
-        console.error('[Angular] reactRemote.mount function not found', reactRemote);
-      }
+      // Use the MFE Abstraction Layer to load the React remote
+      this.mfeInstance = await this.mfeLoader.loadMFE(config, container);
+
+      console.log(`[Angular] ${mfe} React MFE loaded and mounted successfully!`, this.mfeInstance);
     } catch (error) {
       console.error('[Angular] Error loading React remote:', error);
       console.error('[Angular] Error details:', error instanceof Error ? error.stack : error);

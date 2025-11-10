@@ -2,6 +2,24 @@
   <div class="angular-section">
     <h1>{{ title }}</h1>
 
+    <div class="mfe-switcher">
+      <label>Select React MFE:</label>
+      <div class="switch-buttons">
+        <button
+          (click)="switchMFE('pink')"
+          [class.active]="currentMFE === 'pink'"
+          class="switch-button pink-button">
+          Pink Remote
+        </button>
+        <button
+          (click)="switchMFE('orange')"
+          [class.active]="currentMFE === 'orange'"
+          class="switch-button orange-button">
+          Orange Remote
+        </button>
+      </div>
+    </div>
+
     <div class="message-box">
       <label for="angular-input">Send Message to React:</label>
       <input
