@@ -12,6 +12,17 @@ import App from './App';
 export async function mount(container: HTMLElement, context: any): Promise<any> {
   console.log('[React Orange Bootstrap] Mounting with context:', context);
 
+  // Ensure container is completely clean before creating new root
+  // React 18 requires a fresh container for createRoot after unmount
+  container.innerHTML = '';
+
+  // Remove any React internal markers from previous mounts
+  Array.from(container.attributes).forEach(attr => {
+    if (attr.name.startsWith('data-react')) {
+      container.removeAttribute(attr.name);
+    }
+  });
+
   // Set a data attribute on container to identify this MFE
   container.setAttribute('data-mfe', 'react-orange');
 
