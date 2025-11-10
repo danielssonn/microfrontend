@@ -56,6 +56,8 @@ export async function unmount(instance: any): Promise<void> {
   // Unmount React root
   if (root) {
     root.unmount();
+    // Wait for React to finish unmounting (important for React 18)
+    await new Promise(resolve => setTimeout(resolve, 0));
   }
 
   // Clear the container
@@ -64,6 +66,10 @@ export async function unmount(instance: any): Promise<void> {
     container.innerHTML = '';
     container.removeAttribute('data-mfe');
   }
+
+  // Null out the reference to help garbage collection
+  instance._internal.root = null;
+  instance._internal.container = null;
 
   console.log('[React Bootstrap] Cleanup complete');
 }
