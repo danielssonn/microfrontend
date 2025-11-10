@@ -1532,6 +1532,305 @@ export async function unmount(instance) {
 
 ---
 
+## Telemetry Integration
+
+**REQUIRED**: All MFEs must integrate telemetry for health monitoring and performance tracking using established thresholds from destructive testing.
+
+### Step 1: Import Telemetry
+
+Add telemetry to your MFE bootstrap:
+
+```typescript
+import { MFETelemetry, telemetryRegistry } from '@company/mfe-core/telemetry';
+```
+
+### Step 2: Initialize Telemetry in mount()
+
+```typescript
+export async function mount(container: HTMLElement, context: MFEContext): Promise<MFEInstance> {
+  // ✅ Generate unique instance ID
+  const instanceId = `${context.metadata.mfeName}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  // ✅ Initialize telemetry for this instance
+  const telemetry = new MFETelemetry(
+    context.metadata.mfeName,
+    instanceId,
+    {
+      // Optional: Override default thresholds
+      memory: {
+        normal: 750 * 1024,      // 750KB/cycle (from destructive testing)
+        warning: 1024 * 1024,    // 1MB/cycle
+        critical: 1.5 * 1024 * 1024  // 1.5MB/cycle
+      },
+      performance: {
+        mountTimeNormal: 100,    // <100ms mount (from destructive testing)
+        mountTimeWarning: 200,
+        mountTimeCritical: 300,
+        unmountTimeNormal: 50,   // <50ms unmount
+        unmountTimeWarning: 100,
+        unmountTimeCritical: 150
+      },
+      errors: {
+        normal: 0.01,    // <1% error rate
+        warning: 0.05,   // <5% error rate
+        critical: 0.10   // <10% error rate
+      }
+    }
+  );
+  telemetryRegistry.register(instanceId, telemetry);
+
+  telemetry.startMount();
+
+  try {
+    // ... mount logic ...
+
+    const root = ReactDOM.createRoot(container);
+    root.render(<App eventBus={context.eventBus} />);
+
+    telemetry.endMount();
+
+    // ✅ Return enhanced MFEInstance with telemetry
+    return {
+      _internal: { root, container, telemetry },
+      id: instanceId,
+      mfeName: context.metadata.mfeName,
+      mountedAt: new Date(),
+      isHealthy: () => {
+        const health = telemetry.getHealthCheck();
+        return root !== null && health.status !== 'critical';
+      },
+      getHealth: () => telemetry.getHealthCheck(),
+      getTelemetry: () => telemetry.getSummary()
+    };
+  } catch (error) {
+    telemetry.recordError(error as Error, 'mount');
+    throw error;
+  }
+}
+```
+
+### Step 3: Track unmount() in Telemetry
+
+```typescript
+export async function unmount(instance: MFEInstance): Promise<void> {
+  const { root, container, telemetry } = instance._internal;
+
+  telemetry.startUnmount();
+
+  try {
+    // ... unmount logic ...
+
+    if (root) {
+      root.unmount();
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+
+    if (container) {
+      container.innerHTML = '';
+      container.removeAttribute('data-mfe');
+    }
+
+    // Clear localStorage (critical for memory management)
+    localStorage.removeItem(`${instance.mfeName}-data`);
+
+    telemetry.endUnmount();
+
+    // ✅ Unregister from global registry
+    telemetryRegistry.unregister(instance.id);
+
+    // ✅ Null out references for GC
+    instance._internal.root = null;
+    instance._internal.container = null;
+    instance._internal.telemetry = null;
+  } catch (error) {
+    telemetry.recordError(error as Error, 'unmount');
+    throw error;
+  }
+}
+```
+
+### Step 4: Access Telemetry Data
+
+#### From Console (Development/Debugging)
+
+```javascript
+// Access global telemetry registry
+window.__MFE_TELEMETRY__
+
+// Get all active telemetry instances
+window.__MFE_TELEMETRY__.getAll()
+
+// Get overall health status
+window.__MFE_TELEMETRY__.getOverallHealth()  // 'healthy' | 'degraded' | 'critical'
+
+// Get health checks for all instances
+window.__MFE_TELEMETRY__.getAllHealthChecks()
+
+// Get specific instance
+const telemetry = window.__MFE_TELEMETRY__.get('react-pink-instance-id')
+telemetry.getSummary()
+telemetry.getHealthCheck()
+telemetry.exportMetrics()  // Export as JSON
+```
+
+#### From MFE Instance
+
+```typescript
+// During runtime, access instance telemetry
+const instance = await mount(container, context);
+
+// Check health
+const health = instance.getHealth();
+if (health.status === 'critical') {
+  console.error('MFE is unhealthy!', health);
+}
+
+// Get telemetry summary
+const summary = instance.getTelemetry();
+console.log('Performance:', summary.performance);
+console.log('Memory:', summary.memory);
+console.log('Errors:', summary.errors);
+```
+
+### Step 5: Monitor with Telemetry Dashboard
+
+Open the built-in telemetry dashboard:
+
+```bash
+# Serve the dashboard
+open telemetry-dashboard.html
+
+# Or access via http-server
+npx http-server . -p 8080
+open http://localhost:8080/telemetry-dashboard.html
+```
+
+The dashboard displays:
+- **Overall Health**: Aggregate status across all MFE instances
+- **Error Rate**: Current error rate vs. thresholds (<1% healthy, 1-5% degraded, >5% critical)
+- **Average Mount Time**: Performance vs. threshold (<100ms healthy)
+- **Average Memory/Cycle**: Memory growth vs. threshold (<750KB healthy)
+- **Per-Instance Metrics**: Detailed metrics for each active MFE
+
+### Telemetry Thresholds
+
+Based on empirical destructive testing results:
+
+| Metric | Healthy | Degraded | Critical |
+|--------|---------|----------|----------|
+| **Memory/Cycle** | <750KB | 750KB-1MB | >1.5MB |
+| **Mount Time** | <100ms | 100-200ms | >300ms |
+| **Unmount Time** | <50ms | 50-100ms | >150ms |
+| **Error Rate** | <1% | 1-5% | >10% |
+
+### Health Status Levels
+
+```typescript
+enum HealthStatus {
+  HEALTHY = 'healthy',     // All metrics within normal thresholds
+  DEGRADED = 'degraded',   // Some metrics elevated but functional
+  UNHEALTHY = 'unhealthy', // Multiple metrics concerning
+  CRITICAL = 'critical'    // System failing or extreme resource usage
+}
+```
+
+### Telemetry Best Practices
+
+#### ✅ DO:
+- Initialize telemetry at the start of mount()
+- Call `startMount()` before any mount logic
+- Call `endMount()` after successful mount
+- Call `startUnmount()` before unmount logic
+- Call `endUnmount()` after cleanup complete
+- Record errors with context: `telemetry.recordError(error, 'mount')`
+- Unregister telemetry on unmount to prevent memory leaks
+- Monitor dashboard during development
+- Export metrics for production analysis
+
+#### ❌ DON'T:
+- Skip telemetry initialization (required for health monitoring)
+- Forget to unregister telemetry on unmount (causes memory leaks)
+- Ignore health warnings in development
+- Deploy MFEs with critical health status
+- Override thresholds without testing
+
+### Production Monitoring Integration
+
+For production environments, send telemetry to your monitoring system:
+
+```typescript
+// Example: Send to monitoring endpoint
+const telemetry = new MFETelemetry(mfeName, instanceId);
+
+// Periodically report metrics
+setInterval(() => {
+  const summary = telemetry.getSummary();
+  const health = telemetry.getHealthCheck();
+
+  fetch('/api/telemetry', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      mfeName: summary.mfeName,
+      instanceId: summary.instanceId,
+      timestamp: Date.now(),
+      health: health.status,
+      metrics: {
+        avgMountTime: summary.performance.avgMountTime,
+        avgUnmountTime: summary.performance.avgUnmountTime,
+        errorRate: summary.errorRate,
+        memoryPerCycle: summary.memory.perCycle,
+        cycles: summary.cycles
+      }
+    })
+  });
+}, 60000); // Report every minute
+```
+
+### Alerting Rules (Recommended)
+
+Set up alerts for production monitoring:
+
+```yaml
+# Example: Prometheus alerting rules
+groups:
+  - name: mfe_health
+    rules:
+      - alert: MFECriticalHealth
+        expr: mfe_health_status == 'critical'
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MFE {{ $labels.mfeName }} is in critical health"
+
+      - alert: MFEHighErrorRate
+        expr: mfe_error_rate > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MFE {{ $labels.mfeName }} error rate is {{ $value }}%"
+
+      - alert: MFEMemoryLeak
+        expr: rate(mfe_memory_per_cycle[10m]) > 1572864  # 1.5MB
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Potential memory leak in {{ $labels.mfeName }}"
+
+      - alert: MFESlowPerformance
+        expr: mfe_avg_mount_time > 200
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MFE {{ $labels.mfeName }} mount time is {{ $value }}ms"
+```
+
+---
+
 ## Deployment Guide
 
 ### CI/CD Pipeline

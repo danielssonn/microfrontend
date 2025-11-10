@@ -14,6 +14,9 @@ export * from './event-bus';
 // Loaders
 export * from './module-federation-loader';
 
+// Telemetry
+export * from './telemetry';
+
 // Utility to generate unique IDs
 export function generateId(): string {
   return `mfe-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

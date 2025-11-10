@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { MFETelemetry, telemetryRegistry } from '../../shared/mfe-core/src/telemetry';
 
 // MFE Lifecycle implementation for React
 // Note: Each mount creates instance-specific state stored in the returned MFEInstance
@@ -10,7 +11,20 @@ import App from './App';
  * Conforms to MFELifecycle.mount() contract
  */
 export async function mount(container: HTMLElement, context: any): Promise<any> {
+  // Generate unique instance ID
+  const instanceId = `react-pink-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  // Initialize telemetry for this instance
+  const telemetry = new MFETelemetry(
+    context.metadata?.mfeName || 'reactRemote',
+    instanceId
+  );
+  telemetryRegistry.register(instanceId, telemetry);
+
+  telemetry.startMount();
   console.log('[React Bootstrap] Mounting with context:', context);
+
+  try {
 
   // Ensure container is completely clean before creating new root
   // React 18 requires a fresh container for createRoot after unmount
@@ -35,14 +49,26 @@ export async function mount(container: HTMLElement, context: any): Promise<any> 
     <App eventBus={context.eventBus} />
   );
 
+  telemetry.endMount();
+
   // Return MFEInstance with instance-specific state
   return {
-    _internal: { root, container },
-    id: `react-${Date.now()}`,
+    _internal: { root, container, telemetry },
+    id: instanceId,
     mfeName: context.metadata?.mfeName || 'reactRemote',
     mountedAt: new Date(),
-    isHealthy: () => root !== null
+    isHealthy: () => {
+      const health = telemetry.getHealthCheck();
+      return root !== null && health.status !== 'critical';
+    },
+    getHealth: () => telemetry.getHealthCheck(),
+    getTelemetry: () => telemetry.getSummary()
   };
+  } catch (error) {
+    telemetry.recordError(error as Error, 'mount');
+    console.error('[React Bootstrap] Mount failed:', error);
+    throw error;
+  }
 }
 
 /**
@@ -50,9 +76,12 @@ export async function mount(container: HTMLElement, context: any): Promise<any> 
  * Conforms to MFELifecycle.unmount() contract
  */
 export async function unmount(instance: any): Promise<void> {
+  const { root, container, telemetry } = instance._internal;
+
+  telemetry.startUnmount();
   console.log('[React Bootstrap] Unmounting - cleaning up DOM');
 
-  const { root, container } = instance._internal;
+  try {
 
   // Unmount React root
   if (root) {
@@ -82,7 +111,20 @@ export async function unmount(instance: any): Promise<void> {
   instance._internal.root = null;
   instance._internal.container = null;
 
+  telemetry.endUnmount();
+
+  // Unregister telemetry from global registry
+  telemetryRegistry.unregister(instance.id);
+
+  // Null out telemetry reference
+  instance._internal.telemetry = null;
+
   console.log('[React Bootstrap] Cleanup complete');
+  } catch (error) {
+    telemetry.recordError(error as Error, 'unmount');
+    console.error('[React Bootstrap] Unmount failed:', error);
+    throw error;
+  }
 }
 
 // For standalone development
