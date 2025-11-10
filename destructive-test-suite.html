@@ -1305,12 +1305,19 @@
       const start = performance.now();
       let failures = 0;
 
+      // Alternate between Pink and Orange to test cross-MFE isolation
+      const mfes = [
+        { name: 'reactRemote', url: 'http://localhost:5001/remoteEntry.js', container: 'pink-container' },
+        { name: 'reactOrange', url: 'http://localhost:5002/remoteEntry.js', container: 'orange-container' }
+      ];
+
       for (let i = 0; i < 50; i++) {
-        const result = await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+        const mfe = mfes[i % 2];
+        const result = await loadMFE(mfe.name, mfe.url, mfe.container);
         if (!result.success) failures++;
         await sleep(20);
 
-        const unloadResult = await unloadMFE('reactRemote');
+        const unloadResult = await unloadMFE(mfe.name);
         if (!unloadResult.success) failures++;
         await sleep(20);
       }
@@ -1322,7 +1329,7 @@
         'Rapid Switching (50x)',
         passed,
         duration,
-        `Completed 50 switches in ${duration}ms, failures: ${failures}`
+        `Completed 50 switches (alternating Pink/Orange) in ${duration}ms, failures: ${failures}`
       );
     }
 
@@ -1361,12 +1368,18 @@
       if (window.gc) window.gc();
       const initialMemory = performance.memory.usedJSHeapSize;
 
-      // Create memory pressure
+      // Create memory pressure with alternating MFEs
+      const mfes = [
+        { name: 'reactRemote', url: 'http://localhost:5001/remoteEntry.js', container: 'pink-container' },
+        { name: 'reactOrange', url: 'http://localhost:5002/remoteEntry.js', container: 'orange-container' }
+      ];
+
       for (let i = 0; i < 100; i++) {
-        await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+        const mfe = mfes[i % 2];
+        await loadMFE(mfe.name, mfe.url, mfe.container);
         globalEventBus.sendMessage('test', { data: 'x'.repeat(1000) });
         await sleep(10);
-        await unloadMFE('reactRemote');
+        await unloadMFE(mfe.name);
         await sleep(10);
       }
 
@@ -1381,7 +1394,7 @@
         'Memory Stress Test',
         passed,
         duration,
-        `Memory growth: ${memoryGrowthMB.toFixed(2)}MB after 100 cycles`
+        `Memory growth: ${memoryGrowthMB.toFixed(2)}MB after 100 cycles (alternating Pink/Orange)`
       );
     }
 
@@ -1392,11 +1405,18 @@
       const start = performance.now();
       let failures = 0;
 
+      // Alternate between Pink and Orange for cross-MFE stress testing
+      const mfes = [
+        { name: 'reactRemote', url: 'http://localhost:5001/remoteEntry.js', container: 'pink-container' },
+        { name: 'reactOrange', url: 'http://localhost:5002/remoteEntry.js', container: 'orange-container' }
+      ];
+
       for (let i = 0; i < 100; i++) {
-        const load = await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+        const mfe = mfes[i % 2];
+        const load = await loadMFE(mfe.name, mfe.url, mfe.container);
         if (!load.success) failures++;
 
-        const unload = await unloadMFE('reactRemote');
+        const unload = await unloadMFE(mfe.name);
         if (!unload.success) failures++;
       }
 
@@ -1407,7 +1427,7 @@
         'Rapid Mount/Unmount (100x)',
         passed,
         duration,
-        `Completed 100 cycles in ${duration}ms, failures: ${failures}, avg: ${(duration / 100).toFixed(2)}ms/cycle`
+        `Completed 100 cycles (alternating Pink/Orange) in ${duration}ms, failures: ${failures}, avg: ${(duration / 100).toFixed(2)}ms/cycle`
       );
     }
 
@@ -1484,16 +1504,22 @@
       if (window.gc) window.gc();
       const initialMemory = performance.memory.usedJSHeapSize;
 
-      // Create massive memory pressure
+      // Create massive memory pressure with alternating MFEs
+      const mfes = [
+        { name: 'reactRemote', url: 'http://localhost:5001/remoteEntry.js', container: 'pink-container' },
+        { name: 'reactOrange', url: 'http://localhost:5002/remoteEntry.js', container: 'orange-container' }
+      ];
+
       for (let i = 0; i < 500; i++) {
-        const load = await loadMFE('reactRemote', 'http://localhost:5001/remoteEntry.js', 'pink-container');
+        const mfe = mfes[i % 2];
+        const load = await loadMFE(mfe.name, mfe.url, mfe.container);
 
         // Spam messages
         for (let j = 0; j < 10; j++) {
           globalEventBus.sendMessage('bomb', { data: 'x'.repeat(1000) });
         }
 
-        await unloadMFE('reactRemote');
+        await unloadMFE(mfe.name);
       }
 
       if (window.gc) window.gc();
