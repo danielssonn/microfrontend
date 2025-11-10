@@ -1321,6 +1321,215 @@ describe('Memory Leak Detection', () => {
 });
 ```
 
+### Critical Memory Management Patterns
+
+**IMPORTANT**: The following patterns are REQUIRED to prevent memory leaks in MFE mount/unmount cycles.
+
+#### 1. React 18 Container Cleanup
+
+**Problem**: React 18's `createRoot()` cannot be called on previously used containers without complete cleanup.
+
+**Solution** (in mount function):
+```typescript
+export async function mount(container: HTMLElement, context: MFEContext): Promise<MFEInstance> {
+  // ✅ CRITICAL: Clean container completely BEFORE creating root
+  container.innerHTML = '';
+
+  // ✅ CRITICAL: Remove React internal markers from previous mounts
+  // These data-react-* attributes prevent React 18 from re-initializing
+  Array.from(container.attributes).forEach(attr => {
+    if (attr.name.startsWith('data-react')) {
+      container.removeAttribute(attr.name);
+    }
+  });
+
+  // Now safe to create root
+  const root = ReactDOM.createRoot(container);
+  // ...
+}
+```
+
+#### 2. React StrictMode in Production
+
+**Problem**: StrictMode in React 18 intentionally double-mounts components in development, causing 2x memory usage.
+
+**Solution**:
+```typescript
+// ⚠️ DISABLE StrictMode for MFE lifecycle mounts
+root.render(
+  <App eventBus={context.eventBus} />
+);
+
+// ✅ Keep StrictMode for standalone development mode
+if (process.env.NODE_ENV === 'development' && !window.location.pathname.includes('host')) {
+  const devRoot = ReactDOM.createRoot(rootElement);
+  devRoot.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+}
+```
+
+#### 3. localStorage Cleanup
+
+**Problem**: localStorage usage with useState lazy initializers creates closures that accumulate across mounts.
+
+**Solution** (in unmount function):
+```typescript
+export async function unmount(instance: MFEInstance): Promise<void> {
+  const { root, container } = instance._internal;
+
+  // Unmount React
+  if (root) {
+    root.unmount();
+    await new Promise(resolve => setTimeout(resolve, 0)); // Wait for React 18
+  }
+
+  // ✅ CRITICAL: Clear MFE-specific localStorage to prevent closure accumulation
+  try {
+    localStorage.removeItem('mfe-mydata');
+    localStorage.removeItem('mfe-settings');
+    // Remove all MFE-specific keys
+  } catch (error) {
+    console.warn('Failed to clear localStorage:', error);
+  }
+
+  // Clear container
+  if (container) {
+    container.innerHTML = '';
+    container.removeAttribute('data-mfe');
+  }
+
+  // Null out references
+  instance._internal.root = null;
+  instance._internal.container = null;
+}
+```
+
+#### 4. Module Federation Best Practices
+
+**CRITICAL for Shell/Host Applications**: When loading MFEs via Module Federation:
+
+```typescript
+// ❌ WRONG: Re-initializing containers causes memory leaks
+async function loadMFE(name: string) {
+  const container = window[name];
+  await container.init({}); // ← Called every time = LEAK!
+  const factory = await container.get('./App');
+  const module = factory(); // ← Creates new instance every time = LEAK!
+}
+
+// ✅ CORRECT: Initialize once, cache module
+const initializedContainers = new Map();
+const moduleCache = new Map();
+
+async function loadMFE(name: string) {
+  const container = window[name];
+
+  // Only init once per container
+  if (!initializedContainers.has(name)) {
+    await container.init({});
+    initializedContainers.set(name, true);
+  }
+
+  // Only instantiate module once
+  let module;
+  if (moduleCache.has(name)) {
+    module = moduleCache.get(name);
+  } else {
+    const factory = await container.get('./App');
+    module = factory();
+    moduleCache.set(name, module);
+  }
+
+  // Each mount creates a new component instance (correct)
+  // But reuses the same module wrapper (prevents MF leak)
+  return await module.mount(containerEl, context);
+}
+```
+
+#### 5. Event Bus Subscription Cleanup
+
+Already covered in unmount example above, but worth emphasizing:
+
+```typescript
+// Store unsubscribe functions in mount
+const subscriptions: Array<() => void> = [];
+
+const unsub1 = context.eventBus.subscribe('Event1', handler);
+subscriptions.push(unsub1);
+
+// Call all unsubscribes in unmount
+subscriptions.forEach(unsub => unsub());
+```
+
+#### 6. Memory Testing Guidelines
+
+**Expected Memory Growth** (per mount/unmount cycle):
+- **Production usage** (MFEs stay mounted): ~100-250KB overhead
+- **Rapid stress testing** (mount/unmount every 100ms): ~600-750KB overhead
+  - Includes Module Federation runtime state
+  - Browser heap fragmentation
+  - Incomplete GC between rapid operations
+
+**Thresholds**:
+- ✅ **Good**: < 750KB per cycle in stress tests
+- ⚠️ **Warning**: 750KB - 1.5MB per cycle
+- ❌ **Memory Leak**: > 1.5MB per cycle
+
+**Testing**:
+```bash
+# Run destructive test suite
+./serve-test-suite.sh
+
+# Open with memory profiling
+open -a "Google Chrome" --args --enable-precise-memory-info http://localhost:8080/destructive-test-suite.html
+
+# Run breaking point analysis
+# Should pass at 10+ cycles with < 7.5MB growth
+```
+
+#### 7. Common Memory Leak Patterns to Avoid
+
+```typescript
+// ❌ Global variables that persist
+let globalState = {};
+
+// ❌ Event listeners not removed
+window.addEventListener('resize', handler); // No cleanup!
+
+// ❌ Intervals/timeouts not cleared
+setInterval(() => {}, 1000); // Runs forever!
+
+// ❌ DOM nodes kept in closures
+const nodes = [];
+nodes.push(document.querySelector('.foo')); // Prevents GC!
+
+// ✅ Proper cleanup pattern
+export async function mount(container, context) {
+  const cleanupFunctions: Array<() => void> = [];
+
+  // Store cleanup for everything
+  const handler = () => {};
+  window.addEventListener('resize', handler);
+  cleanupFunctions.push(() => window.removeEventListener('resize', handler));
+
+  const interval = setInterval(() => {}, 1000);
+  cleanupFunctions.push(() => clearInterval(interval));
+
+  return {
+    _internal: { cleanupFunctions },
+    // ...
+  };
+}
+
+export async function unmount(instance) {
+  // Run all cleanup
+  instance._internal.cleanupFunctions.forEach(fn => fn());
+}
+```
+
 ---
 
 ## Deployment Guide
