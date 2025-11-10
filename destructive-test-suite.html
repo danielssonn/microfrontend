@@ -1176,7 +1176,7 @@
       const start = performance.now();
 
       // Force GC if available
-      if (global.gc) global.gc();
+      if (window.gc) window.gc();
 
       const initialMemory = performance.memory.usedJSHeapSize;
 
@@ -1189,7 +1189,7 @@
       }
 
       // Force GC if available
-      if (global.gc) global.gc();
+      if (window.gc) window.gc();
 
       const finalMemory = performance.memory.usedJSHeapSize;
       const memoryGrowth = finalMemory - initialMemory;
@@ -1215,7 +1215,7 @@
 
       const start = performance.now();
 
-      if (global.gc) global.gc();
+      if (window.gc) window.gc();
       const initialMemory = performance.memory.usedJSHeapSize;
 
       // Create and destroy many subscriptions
@@ -1225,7 +1225,7 @@
         unsub();
       }
 
-      if (global.gc) global.gc();
+      if (window.gc) window.gc();
       const finalMemory = performance.memory.usedJSHeapSize;
       const memoryGrowth = finalMemory - initialMemory;
       const memoryGrowthMB = memoryGrowth / 1024 / 1024;
@@ -1358,7 +1358,7 @@
       }
 
       const start = performance.now();
-      if (global.gc) global.gc();
+      if (window.gc) window.gc();
       const initialMemory = performance.memory.usedJSHeapSize;
 
       // Create memory pressure
@@ -1370,7 +1370,7 @@
         await sleep(10);
       }
 
-      if (global.gc) global.gc();
+      if (window.gc) window.gc();
       const finalMemory = performance.memory.usedJSHeapSize;
       const memoryGrowthMB = (finalMemory - initialMemory) / 1024 / 1024;
 
@@ -1481,7 +1481,7 @@
       totalTests = 1;
       const start = performance.now();
 
-      if (global.gc) global.gc();
+      if (window.gc) window.gc();
       const initialMemory = performance.memory.usedJSHeapSize;
 
       // Create massive memory pressure
@@ -1496,7 +1496,7 @@
         await unloadMFE('reactRemote');
       }
 
-      if (global.gc) global.gc();
+      if (window.gc) window.gc();
       const finalMemory = performance.memory.usedJSHeapSize;
       const memoryGrowthMB = (finalMemory - initialMemory) / 1024 / 1024;
 
