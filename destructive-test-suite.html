@@ -1599,6 +1599,11 @@
 
               await sleep(5);
 
+              // Force GC every 25 cycles to prevent memory buildup
+              if ((i + 1) % 25 === 0 && window.gc) {
+                window.gc();
+              }
+
               // Log progress every 50 cycles
               if ((i + 1) % 50 === 0) {
                 logConsole(`  Progress: ${i + 1}/${cycles} cycles, failures: ${failures}`, 'info');
