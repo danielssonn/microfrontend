@@ -25,45 +25,44 @@ export async function mount(container: HTMLElement, context: any): Promise<any> 
   console.log('[React Bootstrap] Mounting with context:', context);
 
   try {
+    // Ensure container is completely clean before creating new root
+    // React 18 requires a fresh container for createRoot after unmount
+    container.innerHTML = '';
 
-  // Ensure container is completely clean before creating new root
-  // React 18 requires a fresh container for createRoot after unmount
-  container.innerHTML = '';
+    // Remove any React internal markers from previous mounts
+    Array.from(container.attributes).forEach(attr => {
+      if (attr.name.startsWith('data-react')) {
+        container.removeAttribute(attr.name);
+      }
+    });
 
-  // Remove any React internal markers from previous mounts
-  Array.from(container.attributes).forEach(attr => {
-    if (attr.name.startsWith('data-react')) {
-      container.removeAttribute(attr.name);
-    }
-  });
+    // Set a data attribute on container to identify this MFE
+    container.setAttribute('data-mfe', 'react-pink');
 
-  // Set a data attribute on container to identify this MFE
-  container.setAttribute('data-mfe', 'react-pink');
+    // Create React root
+    // Note: StrictMode disabled for production-like memory profiling
+    // StrictMode intentionally double-mounts components in development
+    // which can cause false positives in memory leak detection
+    const root = ReactDOM.createRoot(container);
+    root.render(
+      <App eventBus={context.eventBus} />
+    );
 
-  // Create React root
-  // Note: StrictMode disabled for production-like memory profiling
-  // StrictMode intentionally double-mounts components in development
-  // which can cause false positives in memory leak detection
-  const root = ReactDOM.createRoot(container);
-  root.render(
-    <App eventBus={context.eventBus} />
-  );
+    telemetry.endMount();
 
-  telemetry.endMount();
-
-  // Return MFEInstance with instance-specific state
-  return {
-    _internal: { root, container, telemetry },
-    id: instanceId,
-    mfeName: context.metadata?.mfeName || 'reactRemote',
-    mountedAt: new Date(),
-    isHealthy: () => {
-      const health = telemetry.getHealthCheck();
-      return root !== null && health.status !== 'critical';
-    },
-    getHealth: () => telemetry.getHealthCheck(),
-    getTelemetry: () => telemetry.getSummary()
-  };
+    // Return MFEInstance with instance-specific state
+    return {
+      _internal: { root, container, telemetry },
+      id: instanceId,
+      mfeName: context.metadata?.mfeName || 'reactRemote',
+      mountedAt: new Date(),
+      isHealthy: () => {
+        const health = telemetry.getHealthCheck();
+        return root !== null && health.status !== 'critical';
+      },
+      getHealth: () => telemetry.getHealthCheck(),
+      getTelemetry: () => telemetry.getSummary()
+    };
   } catch (error) {
     telemetry.recordError(error as Error, 'mount');
     console.error('[React Bootstrap] Mount failed:', error);
@@ -82,44 +81,43 @@ export async function unmount(instance: any): Promise<void> {
   console.log('[React Bootstrap] Unmounting - cleaning up DOM');
 
   try {
+    // Unmount React root
+    if (root) {
+      root.unmount();
+      // Wait for React to finish unmounting (important for React 18)
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
 
-  // Unmount React root
-  if (root) {
-    root.unmount();
-    // Wait for React to finish unmounting (important for React 18)
-    await new Promise(resolve => setTimeout(resolve, 0));
-  }
+    // Clear the container
+    if (container) {
+      console.log('[React Bootstrap] Clearing container');
+      container.innerHTML = '';
+      container.removeAttribute('data-mfe');
+    }
 
-  // Clear the container
-  if (container) {
-    console.log('[React Bootstrap] Clearing container');
-    container.innerHTML = '';
-    container.removeAttribute('data-mfe');
-  }
+    // Clean up localStorage to prevent memory leaks during rapid mount/unmount cycles
+    // This is critical for stress testing scenarios
+    try {
+      localStorage.removeItem('react-pink-receivedMessage');
+      localStorage.removeItem('react-pink-lastMessageFrom');
+      console.log('[React Bootstrap] Cleared localStorage');
+    } catch (error) {
+      console.warn('[React Bootstrap] Failed to clear localStorage:', error);
+    }
 
-  // Clean up localStorage to prevent memory leaks during rapid mount/unmount cycles
-  // This is critical for stress testing scenarios
-  try {
-    localStorage.removeItem('react-pink-receivedMessage');
-    localStorage.removeItem('react-pink-lastMessageFrom');
-    console.log('[React Bootstrap] Cleared localStorage');
-  } catch (error) {
-    console.warn('[React Bootstrap] Failed to clear localStorage:', error);
-  }
+    // Null out the reference to help garbage collection
+    instance._internal.root = null;
+    instance._internal.container = null;
 
-  // Null out the reference to help garbage collection
-  instance._internal.root = null;
-  instance._internal.container = null;
+    telemetry.endUnmount();
 
-  telemetry.endUnmount();
+    // Unregister telemetry from global registry
+    telemetryRegistry.unregister(instance.id);
 
-  // Unregister telemetry from global registry
-  telemetryRegistry.unregister(instance.id);
+    // Null out telemetry reference
+    instance._internal.telemetry = null;
 
-  // Null out telemetry reference
-  instance._internal.telemetry = null;
-
-  console.log('[React Bootstrap] Cleanup complete');
+    console.log('[React Bootstrap] Cleanup complete');
   } catch (error) {
     telemetry.recordError(error as Error, 'unmount');
     console.error('[React Bootstrap] Unmount failed:', error);
