@@ -67,6 +67,16 @@ export async function unmount(instance: any): Promise<void> {
     container.removeAttribute('data-mfe');
   }
 
+  // Clean up localStorage to prevent memory leaks during rapid mount/unmount cycles
+  // This is critical for stress testing scenarios
+  try {
+    localStorage.removeItem('react-orange-receivedMessage');
+    localStorage.removeItem('react-orange-lastMessageFrom');
+    console.log('[React Orange Bootstrap] Cleared localStorage');
+  } catch (error) {
+    console.warn('[React Orange Bootstrap] Failed to clear localStorage:', error);
+  }
+
   // Null out the reference to help garbage collection
   instance._internal.root = null;
   instance._internal.container = null;
