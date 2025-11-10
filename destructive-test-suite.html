@@ -467,6 +467,18 @@
       </div>
 
       <div class="control-group">
+        <label>Breaking Point Analysis 🔥</label>
+        <div class="button-group">
+          <button onclick="findBreakingPoint()" class="destructive" style="background: linear-gradient(135deg, #ff0080 0%, #ff8c00 100%); font-weight: bold;">
+            🔥 Find Breaking Point
+          </button>
+        </div>
+        <p style="color: #8b949e; font-size: 12px; margin-top: 8px;">
+          Progressively increases load until failure: 10, 50, 100, 250, 500, 1000, 2000 cycles
+        </p>
+      </div>
+
+      <div class="control-group">
         <label>Custom Test Configuration</label>
         <div class="button-group">
           <label style="display: inline; text-transform: none; margin-right: 10px;">Iterations:</label>
@@ -1535,6 +1547,159 @@
         duration,
         `Memory growth: ${memoryGrowthMB.toFixed(2)}MB (threshold: 20MB)`
       );
+    }
+
+    // Breaking Point Finder - Progressive load testing
+    async function findBreakingPoint() {
+      if (!confirm('⚠️ WARNING: This will progressively stress test until failure.\n\nThe test will run: 10, 50, 100, 250, 500, 1000, 2000 cycles.\n\nThis may take 10-30 minutes and could crash the browser.\n\nContinue?')) {
+        return;
+      }
+
+      logConsole('🔥 Starting Breaking Point Analysis...', 'error');
+      logConsole('This will progressively increase load until failure is detected', 'warn');
+
+      const testLevels = [10, 50, 100, 250, 500, 1000, 2000];
+      const results = [];
+
+      totalTests = testLevels.length;
+
+      const mfes = [
+        { name: 'reactRemote', url: 'http://localhost:5001/remoteEntry.js', container: 'pink-container' },
+        { name: 'reactOrange', url: 'http://localhost:5002/remoteEntry.js', container: 'orange-container' }
+      ];
+
+      for (const cycles of testLevels) {
+        logConsole(`\n📊 Testing ${cycles} cycles...`, 'info');
+
+        const testStart = performance.now();
+        let failures = 0;
+        let memoryStart = 0;
+        let memoryEnd = 0;
+        let crashed = false;
+
+        try {
+          // Measure initial memory
+          if (window.gc) window.gc();
+          if (performance.memory) {
+            memoryStart = performance.memory.usedJSHeapSize;
+          }
+
+          // Run the cycles
+          for (let i = 0; i < cycles; i++) {
+            const mfe = mfes[i % 2];
+
+            try {
+              const loadResult = await loadMFE(mfe.name, mfe.url, mfe.container);
+              if (!loadResult.success) failures++;
+
+              await sleep(5); // Minimal delay for speed
+
+              const unloadResult = await unloadMFE(mfe.name);
+              if (!unloadResult.success) failures++;
+
+              await sleep(5);
+
+              // Log progress every 50 cycles
+              if ((i + 1) % 50 === 0) {
+                logConsole(`  Progress: ${i + 1}/${cycles} cycles, failures: ${failures}`, 'info');
+              }
+            } catch (error) {
+              failures++;
+              logConsole(`  Error at cycle ${i + 1}: ${error.message}`, 'error');
+            }
+          }
+
+          // Measure final memory
+          if (window.gc) window.gc();
+          if (performance.memory) {
+            memoryEnd = performance.memory.usedJSHeapSize;
+          }
+
+          const duration = performance.now() - testStart;
+          const memoryGrowthMB = (memoryEnd - memoryStart) / 1024 / 1024;
+          const failureRate = (failures / (cycles * 2)) * 100;
+          const avgTimePerCycle = duration / cycles;
+
+          const passed = failures === 0 && memoryGrowthMB < (cycles / 20); // Dynamic threshold
+
+          results.push({
+            cycles,
+            passed,
+            failures,
+            duration,
+            memoryGrowthMB,
+            failureRate,
+            avgTimePerCycle
+          });
+
+          reportTest(
+            `Breaking Point: ${cycles} cycles`,
+            passed,
+            duration,
+            `Failures: ${failures}/${cycles * 2} (${failureRate.toFixed(1)}%), Memory: ${memoryGrowthMB.toFixed(2)}MB, Avg: ${avgTimePerCycle.toFixed(2)}ms/cycle`
+          );
+
+          // Stop if we found the breaking point
+          if (failures > cycles * 0.05) { // More than 5% failure rate
+            logConsole(`\n🔥 BREAKING POINT FOUND at ${cycles} cycles!`, 'error');
+            logConsole(`Failure rate: ${failureRate.toFixed(1)}%`, 'error');
+            logConsole(`Memory growth: ${memoryGrowthMB.toFixed(2)}MB`, 'error');
+            break;
+          }
+
+          if (memoryGrowthMB > cycles / 10) { // Memory growing too fast
+            logConsole(`\n⚠️ MEMORY LIMIT REACHED at ${cycles} cycles!`, 'warn');
+            logConsole(`Memory growth: ${memoryGrowthMB.toFixed(2)}MB (threshold: ${(cycles / 10).toFixed(2)}MB)`, 'warn');
+            break;
+          }
+
+          logConsole(`✓ ${cycles} cycles completed successfully`, 'success');
+
+        } catch (error) {
+          crashed = true;
+          logConsole(`\n💥 CRASH at ${cycles} cycles: ${error.message}`, 'error');
+
+          reportTest(
+            `Breaking Point: ${cycles} cycles`,
+            false,
+            performance.now() - testStart,
+            `CRASHED: ${error.message}`,
+            error.stack
+          );
+
+          break;
+        }
+      }
+
+      // Summary report
+      logConsole('\n' + '='.repeat(60), 'info');
+      logConsole('🔥 BREAKING POINT ANALYSIS COMPLETE', 'success');
+      logConsole('='.repeat(60), 'info');
+
+      for (const result of results) {
+        const status = result.passed ? '✓' : '✗';
+        const color = result.passed ? 'success' : 'error';
+        logConsole(
+          `${status} ${result.cycles} cycles: ${result.failureRate.toFixed(1)}% failure, ${result.memoryGrowthMB.toFixed(2)}MB growth, ${result.avgTimePerCycle.toFixed(2)}ms/cycle`,
+          color
+        );
+      }
+
+      if (results.length > 0) {
+        const lastSuccess = results.filter(r => r.passed).pop();
+        const firstFailure = results.find(r => !r.passed);
+
+        if (lastSuccess && firstFailure) {
+          logConsole(`\n📊 System breaks between ${lastSuccess.cycles} and ${firstFailure.cycles} cycles`, 'warn');
+          logConsole(`   Recommended max load: ${lastSuccess.cycles} cycles with ${(lastSuccess.memoryGrowthMB / lastSuccess.cycles * 1000).toFixed(2)}KB per cycle`, 'info');
+        } else if (lastSuccess) {
+          logConsole(`\n✓ System stable up to ${lastSuccess.cycles} cycles!`, 'success');
+        } else if (firstFailure) {
+          logConsole(`\n⚠️ System failed at ${firstFailure.cycles} cycles`, 'error');
+        }
+      }
+
+      logConsole('='.repeat(60), 'info');
     }
 
     async function runCustomStressTest() {
