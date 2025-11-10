@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Rspack MFE Loading</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #1e1e1e;
+      color: #d4d4d4;
+    }
+    .log {
+      background: #252526;
+      padding: 10px;
+      margin: 10px 0;
+      border-left: 3px solid #007acc;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .error {
+      border-left-color: #f48771;
+      background: #3b1f1f;
+    }
+    .success {
+      border-left-color: #89d185;
+      background: #1f3b1f;
+    }
+    #mfe-container {
+      border: 2px dashed #444;
+      min-height: 200px;
+      margin: 20px 0;
+      padding: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Rspack Module Federation Test</h1>
+  <button onclick="testLoadRspackRemote()">Load React Pink (Rspack)</button>
+  <button onclick="testLoadOrangeRemote()">Load React Orange (Rspack)</button>
+  <button onclick="clearLogs()">Clear Logs</button>
+
+  <div id="logs"></div>
+  <div id="mfe-container"></div>
+
+  <script>
+    function log(message, type = 'log') {
+      const logsDiv = document.getElementById('logs');
+      const logEntry = document.createElement('div');
+      logEntry.className = `log ${type}`;
+      logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logsDiv.appendChild(logEntry);
+      console[type === 'error' ? 'error' : 'log'](message);
+    }
+
+    function clearLogs() {
+      document.getElementById('logs').innerHTML = '';
+      document.getElementById('mfe-container').innerHTML = '';
+    }
+
+    async function loadScript(url, name) {
+      return new Promise((resolve, reject) => {
+        log(`Loading script: ${url}`);
+        const script = document.createElement('script');
+        script.src = url;
+        script.type = 'text/javascript';
+        script.async = true;
+        script.onload = () => {
+          log(`✓ Script loaded: ${name}`, 'success');
+          resolve();
+        };
+        script.onerror = () => {
+          log(`✗ Script failed to load: ${url}`, 'error');
+          reject(new Error(`Failed to load script: ${url}`));
+        };
+        document.head.appendChild(script);
+      });
+    }
+
+    async function testLoadRspackRemote() {
+      try {
+        clearLogs();
+        log('Starting Rspack MFE load test...');
+
+        // Load remote entry
+        await loadScript('http://localhost:5001/remoteEntry.js', 'reactRemote');
+
+        // Check if container exists
+        if (!window.reactRemote) {
+          throw new Error('reactRemote container not found on window object');
+        }
+        log('✓ reactRemote container found', 'success');
+
+        // Check container structure
+        log(`Container keys: ${Object.keys(window.reactRemote).join(', ')}`);
+
+        if (typeof window.reactRemote.get !== 'function') {
+          throw new Error('reactRemote.get is not a function');
+        }
+        log('✓ reactRemote.get is a function', 'success');
+
+        if (typeof window.reactRemote.init !== 'function') {
+          throw new Error('reactRemote.init is not a function');
+        }
+        log('✓ reactRemote.init is a function', 'success');
+
+        // Initialize container
+        log('Calling reactRemote.init({})...');
+        await window.reactRemote.init({});
+        log('✓ Container initialized', 'success');
+
+        // Get module
+        log('Calling reactRemote.get("./App")...');
+        const factory = await window.reactRemote.get('./App');
+        log('✓ Module factory retrieved', 'success');
+        log(`Factory type: ${typeof factory}`);
+
+        // Execute factory
+        log('Executing factory()...');
+        const module = factory();
+        log('✓ Module executed', 'success');
+        log(`Module keys: ${Object.keys(module).join(', ')}`);
+
+        // Check lifecycle methods
+        if (typeof module.mount !== 'function') {
+          throw new Error('module.mount is not a function');
+        }
+        log('✓ module.mount is a function', 'success');
+
+        if (typeof module.unmount !== 'function') {
+          throw new Error('module.unmount is not a function');
+        }
+        log('✓ module.unmount is a function', 'success');
+
+        // Mount the MFE
+        const container = document.getElementById('mfe-container');
+        log('Calling module.mount()...');
+        const instance = await module.mount(container, {
+          metadata: { mfeName: 'reactRemote', version: '1.0.0' },
+          routing: { currentPath: '/' },
+          eventBus: {
+            subscribe: (event, handler) => () => {},
+            publish: (event, payload) => {}
+          },
+          auth: { isAuthenticated: false },
+          config: {}
+        });
+        log('✓ MFE mounted successfully!', 'success');
+        log(`Instance: ${JSON.stringify(instance, null, 2)}`);
+
+      } catch (error) {
+        log(`✗ Error: ${error.message}`, 'error');
+        log(`Stack: ${error.stack}`, 'error');
+      }
+    }
+
+    async function testLoadOrangeRemote() {
+      try {
+        clearLogs();
+        log('Starting Rspack Orange MFE load test...');
+
+        await loadScript('http://localhost:5002/remoteEntry.js', 'reactOrange');
+
+        if (!window.reactOrange) {
+          throw new Error('reactOrange container not found');
+        }
+        log('✓ reactOrange container found', 'success');
+
+        log('Calling reactOrange.init({})...');
+        await window.reactOrange.init({});
+        log('✓ Container initialized', 'success');
+
+        log('Calling reactOrange.get("./App")...');
+        const factory = await window.reactOrange.get('./App');
+        const module = factory();
+        log('✓ Module loaded', 'success');
+
+        const container = document.getElementById('mfe-container');
+        const instance = await module.mount(container, {
+          metadata: { mfeName: 'reactOrange', version: '1.0.0' },
+          routing: { currentPath: '/' },
+          eventBus: {
+            subscribe: (event, handler) => () => {},
+            publish: (event, payload) => {}
+          },
+          auth: { isAuthenticated: false },
+          config: {}
+        });
+        log('✓ Orange MFE mounted successfully!', 'success');
+
+      } catch (error) {
+        log(`✗ Error: ${error.message}`, 'error');
+        log(`Stack: ${error.stack}`, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

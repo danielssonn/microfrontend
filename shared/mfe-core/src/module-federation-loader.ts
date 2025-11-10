@@ -35,8 +35,12 @@ export class ModuleFederationLoader implements MFELoader {
         );
       }
 
-      // Initialize the container
-      await container.init(__webpack_share_scopes__.default);
+      // Initialize the container with shared scope
+      // Use window.__webpack_share_scopes__ or create empty object if not available
+      const shareScope = typeof __webpack_share_scopes__ !== 'undefined' && __webpack_share_scopes__.default
+        ? __webpack_share_scopes__.default
+        : {};
+      await container.init(shareScope);
 
       // Get the module factory
       const factory = await container.get(config.module);
