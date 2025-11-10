@@ -27,11 +27,12 @@ export async function mount(container: HTMLElement, context: any): Promise<any> 
   container.setAttribute('data-mfe', 'react-pink');
 
   // Create React root
+  // Note: StrictMode disabled for production-like memory profiling
+  // StrictMode intentionally double-mounts components in development
+  // which can cause false positives in memory leak detection
   const root = ReactDOM.createRoot(container);
   root.render(
-    <React.StrictMode>
-      <App eventBus={context.eventBus} />
-    </React.StrictMode>
+    <App eventBus={context.eventBus} />
   );
 
   // Return MFEInstance with instance-specific state
