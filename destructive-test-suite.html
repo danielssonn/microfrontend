@@ -562,6 +562,7 @@
   <script>
     // Test state
     let testsRun = 0;
+    const initializedContainers = new Map(); // Track initialized Module Federation containers
     let testsPassed = 0;
     let testsFailed = 0;
     let totalTests = 0;
@@ -760,8 +761,13 @@
           throw new Error(`Container ${scope} not found`);
         }
 
-        // Initialize
-        await container.init({});
+        // Initialize container ONLY ONCE per scope
+        // Repeated init() calls cause memory leaks in Module Federation
+        if (!initializedContainers.has(scope)) {
+          await container.init({});
+          initializedContainers.set(scope, true);
+          logConsole(`Initialized Module Federation container: ${scope}`, 'info');
+        }
 
         // Get module
         const factory = await container.get('./App');
@@ -1805,6 +1811,10 @@
 
       // Clear event bus
       globalEventBus.clear();
+
+      // Clear initialized containers cache
+      // Note: Page reload required to fully reset Module Federation state
+      initializedContainers.clear();
 
       logConsole('Cleared all tests and state', 'info');
     }
